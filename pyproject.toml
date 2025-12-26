@@ -1,0 +1,30 @@
+[project]
+name = "savelens-image"
+version = "0.1.0"
+description = "Privacy-safe image sanitization pipeline with PII detection and face detection using Gemini Vision API"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "fastapi>=0.127.0",
+    "google-genai>=1.56.0",
+    "numpy<2.0",
+    "opencv-python>=4.8.0",
+    "pillow>=10.0",
+    "pydantic>=2.12.5",
+    "python-multipart>=0.0.20",
+    "uvicorn[standard]>=0.39.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "black>=23.11.0",
+    "ruff>=0.1.6",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
