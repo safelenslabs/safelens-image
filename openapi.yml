@@ -137,7 +137,7 @@ paths:
       tags:
         - anonymization
       summary: Anonymize Image
-      description: Apply anonymization to specific regions using bounding boxes
+      description: Apply anonymization to specific regions using bounding boxes and PII types. Returns both original and new anonymized image UUIDs.
       operationId: anonymize_with_bboxes
       requestBody:
         required: true
@@ -170,24 +170,17 @@ paths:
       tags:
         - images
       summary: Download Image
-      description: Download the original or anonymized image
+      description: Download an image by UUID (original or anonymized)
       operationId: download_image
       parameters:
         - name: image_id
           in: path
           required: true
-          description: UUID of the image
+          description: UUID of the image (original or anonymized)
           schema:
             type: string
             format: uuid
             example: 550e8400-e29b-41d4-a716-446655440000
-        - name: anonymized
-          in: query
-          required: false
-          description: Download anonymized version
-          schema:
-            type: boolean
-            default: true
         - name: format
           in: query
           required: false
@@ -330,6 +323,9 @@ components:
         - id_number
         - credit_card
         - date_of_birth
+        - qrcode
+        - barcode
+        - signboard
         - other
 
     ReplacementMethod:
@@ -454,6 +450,19 @@ components:
         - image_id
         - message
 
+    BboxWithLabel:
+      type: object
+      description: Bounding box with PII type label
+      properties:
+        bbox:
+          $ref: "#/components/schemas/BoundingBox"
+        pii_type:
+          type: string
+          description: PII type or "face"
+          example: qrcode
+      required:
+        - bbox
+
     BboxAnonymizeRequest:
       type: object
       description: Request to anonymize specific regions
@@ -463,27 +472,32 @@ components:
           format: uuid
           description: UUID of the image to anonymize
           example: 550e8400-e29b-41d4-a716-446655440000
-        bboxes:
+        regions:
           type: array
-          description: List of bounding boxes to anonymize
+          description: List of regions with bounding boxes and PII types
           items:
-            $ref: "#/components/schemas/BoundingBox"
+            $ref: "#/components/schemas/BboxWithLabel"
           minItems: 1
         method:
           $ref: "#/components/schemas/ReplacementMethod"
       required:
         - image_id
-        - bboxes
+        - regions
 
     AnonymizeResponse:
       type: object
       description: Response from anonymization operation
       properties:
-        image_id:
+        original_image_id:
           type: string
           format: uuid
-          description: UUID of the anonymized image
+          description: UUID of the original image
           example: 550e8400-e29b-41d4-a716-446655440000
+        anonymized_image_id:
+          type: string
+          format: uuid
+          description: UUID of the newly created anonymized image
+          example: 660e8400-e29b-41d4-a716-446655440001
         success:
           type: boolean
           description: Whether anonymization was successful
@@ -497,7 +511,8 @@ components:
           description: Number of regions processed
           example: 2
       required:
-        - image_id
+        - original_image_id
+        - anonymized_image_id
         - success
         - message
         - processed_count

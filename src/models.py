@@ -20,20 +20,27 @@ class PIIType(str, Enum):
     ID_NUMBER = "id_number"
     CREDIT_CARD = "credit_card"
     DATE_OF_BIRTH = "date_of_birth"
+    QRCODE = "qrcode"
+    BARCODE = "barcode"
+    SIGNBOARD = "signboard"
     OTHER = "other"
 
 
 # Default replacement values for each PII type when using GENERATE method
+# For QRCODE and BARCODE, the values point to reference images in the figure folder
 PII_REPLACEMENT_VALUES = {
-    PIIType.PHONE: "010-0000-0000",
+    PIIType.PHONE: "XXX-XXXX-XXXX",
     PIIType.EMAIL: "privacy@example.com",
-    PIIType.ADDRESS: "Seoul, South Korea 12345",
+    PIIType.ADDRESS: "XXX Privacy St, XXX",
     PIIType.NAME: "Privacy User",
-    PIIType.LICENSE_PLATE: "12AB-3456",
-    PIIType.ID_NUMBER: "000000-0000000",
-    PIIType.CREDIT_CARD: "0000-0000-0000-0000",
-    PIIType.DATE_OF_BIRTH: "2000-01-01",
-    PIIType.OTHER: None,  # Use random/background fill for unspecified types
+    PIIType.LICENSE_PLATE: "XXXX-XXXX",
+    PIIType.ID_NUMBER: "XXXXXX-XXXXXX",
+    PIIType.CREDIT_CARD: "XXXX-XXXX-XXXX-XXXX",
+    PIIType.DATE_OF_BIRTH: "YYYY-MM-DD",
+    PIIType.QRCODE: "figure/qrcode.png",  # Reference image for QR code replacement
+    PIIType.BARCODE: "figure/barcode.png",  # Reference image for barcode replacement
+    PIIType.SIGNBOARD: "Privacy Store",
+    PIIType.OTHER: None,
 }
 
 

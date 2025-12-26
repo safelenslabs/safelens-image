@@ -12,7 +12,7 @@ from src.models import AnonymizationRequest, ReplacementRequest, ReplacementMeth
 load_dotenv()
 
 # Configuration
-IMAGE_PATH = "public/example6.jpg"  # Change this to use a different image
+IMAGE_PATH = "public/example7.jpg"  # Change this to use a different image
 
 
 def main():
@@ -26,7 +26,7 @@ def main():
     image_path = Path(IMAGE_PATH)
     if not image_path.exists():
         print(f"❌ Example image not found: {image_path}")
-        print("   Please place an image at public/example1.jpg")
+        print(f"   Please place an image at {image_path}")
         return
 
     image = Image.open(image_path)

@@ -35,11 +35,14 @@ Analyze the provided image (Resolution: {width}x{height}) and DETECT ONLY the fo
    - Personal names (when clearly readable)
    - Email addresses (with @ symbol visible)
    - Vehicle license plates / car number plates (with plate number visible)
+   - QR codes (any visible QR code pattern)
+   - Barcodes (any visible barcode pattern)
+   - Signboards (store signs, shop names, business signs with text)
    
    DO NOT detect:
    - Blurry or illegible text
-   - Logos, brand names, or store signs
-   - General labels or descriptions
+   - Generic logos without text
+   - General labels or descriptions without personal info
    - Random patterns that look like text
 
 2. **Human faces** - ONLY detect clear, recognizable human faces:
@@ -54,7 +57,7 @@ Analyze the provided image (Resolution: {width}x{height}) and DETECT ONLY the fo
 For EACH detected item, output a JSON object with:
 - id: unique string identifier
 - type: "text_pii" or "face"
-- label: for text_pii: "phone" | "address" | "name" | "email" | "license_plate" ; for face: "face"
+- label: for text_pii: "phone" | "address" | "name" | "email" | "license_plate" | "qrcode" | "barcode" | "signboard" ; for face: "face"
 - bbox: bounding box as [ymin, xmin, ymax, xmax] where:
   * VALUES MUST BE INTEGERS BETWEEN 0 AND 1000 (NORMALIZED COORDINATES)
   * 0 represents top/left edge, 1000 represents bottom/right edge
@@ -307,6 +310,9 @@ class GeminiDetector:
                     "address": PIIType.ADDRESS,
                     "name": PIIType.NAME,
                     "license_plate": PIIType.LICENSE_PLATE,
+                    "qrcode": PIIType.QRCODE,
+                    "barcode": PIIType.BARCODE,
+                    "signboard": PIIType.SIGNBOARD,
                 }
                 pii_type = pii_type_map.get(label, PIIType.OTHER)
 

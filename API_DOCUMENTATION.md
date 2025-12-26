@@ -121,6 +121,9 @@ Run detection on an uploaded image to find PII (personally identifiable informat
 - `id_number`: ID/SSN numbers
 - `credit_card`: Credit card numbers
 - `date_of_birth`: Birth dates
+- `qrcode`: QR codes
+- `barcode`: Barcodes
+- `signboard`: Store signs and signboards
 - `other`: Other PII
 
 **Example (curl):**
@@ -135,25 +138,31 @@ curl -X POST "http://localhost:8000/detect/550e8400-e29b-41d4-a716-446655440000"
 
 **POST** `/anonymize`
 
-Apply anonymization to specific regions of the image using bounding boxes.
+Apply anonymization to specific regions of the image using bounding boxes with PII type labels.
 
 **Request Body:**
 
 ```json
 {
   "image_id": "550e8400-e29b-41d4-a716-446655440000",
-  "bboxes": [
+  "regions": [
     {
-      "x": 100,
-      "y": 200,
-      "width": 150,
-      "height": 30
+      "bbox": {
+        "x": 100,
+        "y": 200,
+        "width": 150,
+        "height": 30
+      },
+      "pii_type": "phone"
     },
     {
-      "x": 500,
-      "y": 300,
-      "width": 200,
-      "height": 250
+      "bbox": {
+        "x": 500,
+        "y": 300,
+        "width": 200,
+        "height": 250
+      },
+      "pii_type": "face"
     }
   ],
   "method": "generate"
@@ -163,11 +172,13 @@ Apply anonymization to specific regions of the image using bounding boxes.
 **Parameters:**
 
 - `image_id` (string, required): UUID of the image
-- `bboxes` (array, required): List of bounding boxes to anonymize
-  - `x` (integer): X coordinate (top-left)
-  - `y` (integer): Y coordinate (top-left)
-  - `width` (integer): Width of the region
-  - `height` (integer): Height of the region
+- `regions` (array, required): List of regions to anonymize
+  - `bbox` (object): Bounding box coordinates
+    - `x` (integer): X coordinate (top-left)
+    - `y` (integer): Y coordinate (top-left)
+    - `width` (integer): Width of the region
+    - `height` (integer): Height of the region
+  - `pii_type` (string, optional): PII type or "face" (e.g., "phone", "email", "qrcode", "barcode", "face")
 - `method` (string, optional): Anonymization method (default: "generate")
   - `generate`: AI-powered generative fill using Gemini
   - `blur`: Gaussian blur
@@ -178,7 +189,8 @@ Apply anonymization to specific regions of the image using bounding boxes.
 
 ```json
 {
-  "image_id": "550e8400-e29b-41d4-a716-446655440000",
+  "original_image_id": "550e8400-e29b-41d4-a716-446655440000",
+  "anonymized_image_id": "660e8400-e29b-41d4-a716-446655440001",
   "success": true,
   "message": "Successfully anonymized 2 regions",
   "processed_count": 2
@@ -192,8 +204,11 @@ curl -X POST "http://localhost:8000/anonymize" \
   -H "Content-Type: application/json" \
   -d '{
     "image_id": "550e8400-e29b-41d4-a716-446655440000",
-    "bboxes": [
-      {"x": 100, "y": 200, "width": 150, "height": 30}
+    "regions": [
+      {
+        "bbox": {"x": 100, "y": 200, "width": 150, "height": 30},
+        "pii_type": "phone"
+      }
     ],
     "method": "generate"
   }'
@@ -205,15 +220,14 @@ curl -X POST "http://localhost:8000/anonymize" \
 
 **GET** `/download/{image_id}`
 
-Download the original or anonymized image.
+Download an image by UUID (original or anonymized).
 
 **Path Parameters:**
 
-- `image_id` (string, required): UUID of the image
+- `image_id` (string, required): UUID of the image (use `original_image_id` or `anonymized_image_id` from anonymize response)
 
 **Query Parameters:**
 
-- `anonymized` (boolean, optional): Download anonymized version (default: true)
 - `format` (string, optional): Output format - `png`, `jpg`, `jpeg`, `webp` (default: "png")
 
 **Response:**
@@ -223,13 +237,13 @@ Download the original or anonymized image.
 **Examples (curl):**
 
 ```bash
-# Download anonymized image (PNG)
+# Download original image
 curl -X GET "http://localhost:8000/download/550e8400-e29b-41d4-a716-446655440000" \
-  -o anonymized.png
+  -o original.png
 
-# Download original image (JPG)
-curl -X GET "http://localhost:8000/download/550e8400-e29b-41d4-a716-446655440000?anonymized=false&format=jpg" \
-  -o original.jpg
+# Download anonymized image (using anonymized_image_id from /anonymize response)
+curl -X GET "http://localhost:8000/download/660e8400-e29b-41d4-a716-446655440001?format=jpg" \
+  -o anonymized.jpg
 ```
 
 ---
@@ -336,9 +350,15 @@ curl -X POST "http://localhost:8000/anonymize" \
   -H "Content-Type: application/json" \
   -d '{
     "image_id": "abc-123",
-    "bboxes": [
-      {"x": 100, "y": 200, "width": 150, "height": 30},
-      {"x": 500, "y": 300, "width": 200, "height": 250}
+    "regions": [
+      {
+        "bbox": {"x": 100, "y": 200, "width": 150, "height": 30},
+        "pii_type": "phone"
+      },
+      {
+        "bbox": {"x": 500, "y": 300, "width": 200, "height": 250},
+        "pii_type": "face"
+      }
     ],
     "method": "generate"
   }'
@@ -348,7 +368,8 @@ Response:
 
 ```json
 {
-  "image_id": "abc-123",
+  "original_image_id": "abc-123",
+  "anonymized_image_id": "xyz-789",
   "success": true,
   "message": "Successfully anonymized 2 regions",
   "processed_count": 2
@@ -358,7 +379,8 @@ Response:
 ### Step 4: Download Anonymized Image
 
 ```bash
-curl -X GET "http://localhost:8000/download/abc-123" \
+# Use the anonymized_image_id from the response
+curl -X GET "http://localhost:8000/download/xyz-789" \
   -o anonymized.png
 ```
 
