@@ -21,25 +21,20 @@ class Anonymizer:
     
     def __init__(
         self,
+        generator=None,
         default_face_method: ReplacementMethod = ReplacementMethod.BLUR,
-        default_text_method: ReplacementMethod = ReplacementMethod.MASK
+        default_text_method: ReplacementMethod = ReplacementMethod.BLUR
     ):
         """Initialize anonymizer with default settings.
         
         Args:
+            generator: Object with generate_replacement method (e.g. GeminiDetector)
             default_face_method: Default method for face anonymization (BLUR or INPAINT recommended)
             default_text_method: Default method for text PII anonymization (MASK or REDACT recommended)
         """
+        self.generator = generator
         self.default_face_method = default_face_method
         self.default_text_method = default_text_method
-        
-        self.emoji_map = {
-            'default': '😊',
-            'smile': '😊',
-            'neutral': '😐',
-            'cool': '😎',
-            'robot': '🤖',
-        }
     
     def anonymize_image(
         self,
@@ -73,22 +68,12 @@ class Anonymizer:
     ) -> Image.Image:
         """Apply a single replacement to an image region."""
         
-        if method == ReplacementMethod.MASK:
-            return self._mask_text(image, region)
-        elif method == ReplacementMethod.SYNTHETIC_TEXT:
-            return self._replace_with_synthetic_text(image, region, custom_data)
-        elif method == ReplacementMethod.REDACT:
-            return self._redact_region(image, region)
+        if method == ReplacementMethod.GENERATE:
+            return self._generate_region(image, region)
         elif method == ReplacementMethod.BLUR:
             return self._blur_region(image, region)
-        elif method == ReplacementMethod.PIXELATE:
-            return self._pixelate_region(image, region)
-        elif method == ReplacementMethod.EMOJI:
-            return self._replace_with_emoji(image, region, custom_data)
         elif method == ReplacementMethod.BLACK_BOX:
             return self._black_box(image, region)
-        elif method == ReplacementMethod.INPAINT:
-            return self._inpaint_region(image, region)
         else:
             # Default to black box for unknown methods
             return self._black_box(image, region)
@@ -101,79 +86,28 @@ class Anonymizer:
         draw.rectangle([x1, y1, x2, y2], fill=255)
         return mask
     
-    def _mask_text(self, image: Image.Image, region: BoundingBox) -> Image.Image:
-        """Replace text with asterisks (****)."""
-        result = image.copy()
-        draw = ImageDraw.Draw(result)
-        
-        # Get bounding box coordinates
-        x1, y1, x2, y2 = region.to_xyxy()
-        
-        # Draw white filled rectangle
-        draw.rectangle([x1, y1, x2, y2], fill='white')
-        
-        # Draw asterisks
-        mask_text = "****"
-        try:
-            # Try to use a reasonable font size
-            font_size = min(region.height - 4, 20)
-            font = ImageFont.truetype("arial.ttf", font_size)
-        except:
-            font = ImageFont.load_default()
-        
-        # Center the text in bounding box
-        text_bbox = draw.textbbox((0, 0), mask_text, font=font)
-        text_width = text_bbox[2] - text_bbox[0]
-        text_height = text_bbox[3] - text_bbox[1]
-        
-        text_x = x1 + (region.width - text_width) // 2
-        text_y = y1 + (region.height - text_height) // 2
-        
-        draw.text((text_x, text_y), mask_text, fill='black', font=font)
-        
-        return result
-    
-    def _replace_with_synthetic_text(
-        self, 
-        image: Image.Image, 
-        region: BoundingBox,
-        custom_text: Optional[str] = None
-    ) -> Image.Image:
-        """Replace text with custom synthetic text."""
-        result = image.copy()
-        draw = ImageDraw.Draw(result)
-        
-        # Get bounding box coordinates
-        x1, y1, x2, y2 = region.to_xyxy()
-        
-        # Draw white background
-        draw.rectangle([x1, y1, x2, y2], fill='white')
-        
-        # Use custom text or default
-        text = custom_text if custom_text else "[REDACTED]"
+    def _generate_region(self, image: Image.Image, region: BoundingBox) -> Image.Image:
+        """Use generative AI to fill the region."""
+        if not self.generator:
+            print("Warning: No generator provided for GENERATE method. Falling back to BLUR.")
+            return self._blur_region(image, region)
         
         try:
-            font_size = min(region.height - 4, 16)
-            font = ImageFont.truetype("arial.ttf", font_size)
-        except:
-            font = ImageFont.load_default()
-        
-        # Draw text
-        text_bbox = draw.textbbox((0, 0), text, font=font)
-        text_width = text_bbox[2] - text_bbox[0]
-        text_height = text_bbox[3] - text_bbox[1]
-        
-        text_x = x1 + (region.width - text_width) // 2
-        text_y = y1 + (region.height - text_height) // 2
-        
-        draw.text((text_x, text_y), text, fill='gray', font=font)
-        
-        return result
-    
-    def _redact_region(self, image: Image.Image, region: BoundingBox) -> Image.Image:
-        """Draw a solid black box over the region."""
-        return self._black_box(image, region)
-    
+            # Call generator to get a patch
+            patch = self.generator.generate_replacement(image, region)
+            if patch:
+                result = image.copy()
+                x1, y1, x2, y2 = region.to_xyxy()
+                # Resize patch to fit region if needed
+                patch = patch.resize((region.width, region.height))
+                result.paste(patch, (x1, y1))
+                return result
+            else:
+                return self._blur_region(image, region)
+        except Exception as e:
+            print(f"Error in generation: {e}")
+            return self._blur_region(image, region)
+
     def _black_box(self, image: Image.Image, region: BoundingBox) -> Image.Image:
         """Draw a black rectangle over the region."""
         result = image.copy()
@@ -200,111 +134,6 @@ class Anonymizer:
         
         # Paste back
         result.paste(blurred, (x1, y1))
-        
-        return result
-    
-    def _pixelate_region(
-        self, 
-        image: Image.Image, 
-        region: BoundingBox,
-        pixel_size: int = 10
-    ) -> Image.Image:
-        """Apply pixelation effect to the region."""
-        result = image.copy()
-        
-        # Get bounding box coordinates
-        x1, y1, x2, y2 = region.to_xyxy()
-        
-        # Extract region
-        region_crop = result.crop((x1, y1, x2, y2))
-        
-        # Resize down and up to create pixelation effect
-        small_size = (max(1, region.width // pixel_size), max(1, region.height // pixel_size))
-        pixelated = region_crop.resize(small_size, Image.NEAREST)
-        pixelated = pixelated.resize((region.width, region.height), Image.NEAREST)
-        
-        # Paste back
-        result.paste(pixelated, (x1, y1))
-        
-        return result
-    
-    def _replace_with_emoji(
-        self,
-        image: Image.Image,
-        region: BoundingBox,
-        emoji_type: Optional[str] = None
-    ) -> Image.Image:
-        """Replace region with an emoji."""
-        result = image.copy()
-        draw = ImageDraw.Draw(result)
-        
-        # Get bounding box coordinates
-        x1, y1, x2, y2 = region.to_xyxy()
-        
-        # Draw light background
-        draw.rectangle([x1, y1, x2, y2], fill='#f0f0f0')
-        
-        # Get emoji
-        emoji = self.emoji_map.get(emoji_type, self.emoji_map['default'])
-        
-        # Try to draw emoji with large font
-        try:
-            font_size = min(region.width, region.height) - 10
-            font = ImageFont.truetype("seguiemj.ttf", font_size)  # Windows emoji font
-        except:
-            try:
-                font = ImageFont.truetype("Apple Color Emoji.ttc", font_size)  # macOS
-            except:
-                # Fallback: just draw a circle
-                center_x = x1 + region.width // 2
-                center_y = y1 + region.height // 2
-                radius = min(region.width, region.height) // 3
-                draw.ellipse(
-                    [center_x - radius, center_y - radius, center_x + radius, center_y + radius],
-                    fill='yellow',
-                    outline='black',
-                    width=2
-                )
-                return result
-        
-        # Draw emoji centered
-        text_bbox = draw.textbbox((0, 0), emoji, font=font)
-        text_width = text_bbox[2] - text_bbox[0]
-        text_height = text_bbox[3] - text_bbox[1]
-        
-        text_x = x1 + (region.width - text_width) // 2
-        text_y = y1 + (region.height - text_height) // 2
-        
-        draw.text((text_x, text_y), emoji, font=font, embedded_color=True)
-        
-        return result
-    
-    def _inpaint_region(self, image: Image.Image, region: BoundingBox) -> Image.Image:
-        """
-        Apply AI-based inpainting to the region.
-        
-        For production use, integrate with models like:
-        - LaMa (Large Mask Inpainting)
-        - Stable Diffusion Inpainting
-        - OpenCV inpainting
-        
-        This implementation uses OpenCV's inpainting as a placeholder.
-        """
-        # Convert to OpenCV format
-        img_array = np.array(image)
-        img_cv = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
-        
-        # Create mask from bounding box
-        mask = np.zeros(img_array.shape[:2], dtype=np.uint8)
-        x1, y1, x2, y2 = region.to_xyxy()
-        mask[y1:y2, x1:x2] = 255
-        
-        # Apply inpainting (using Telea algorithm)
-        inpainted = cv2.inpaint(img_cv, mask, inpaintRadius=3, flags=cv2.INPAINT_TELEA)
-        
-        # Convert back to PIL
-        inpainted_rgb = cv2.cvtColor(inpainted, cv2.COLOR_BGR2RGB)
-        result = Image.fromarray(inpainted_rgb)
         
         return result
     

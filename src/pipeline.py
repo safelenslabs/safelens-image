@@ -34,8 +34,11 @@ class PrivacyPipeline:
         self,
         gemini_api_key: Optional[str] = None,
         min_confidence: float = 0.7,
+        detection_model: str = "gemini-3-flash-preview",
+        generation_model: str = "gemini-3-flash-preview",
+        imagen_model: str = "imagen-3.0-generate-001",
         default_face_method: ReplacementMethod = ReplacementMethod.BLUR,
-        default_text_method: ReplacementMethod = ReplacementMethod.MASK,
+        default_text_method: ReplacementMethod = ReplacementMethod.BLUR,
         upload_dir: str = "uploads",
         output_dir: str = "outputs"
     ):
@@ -45,6 +48,9 @@ class PrivacyPipeline:
         Args:
             gemini_api_key: Google Gemini API key (if None, will read from env)
             min_confidence: Minimum confidence for detections
+            detection_model: Gemini model to use for detection
+            generation_model: Gemini model to use for describing context for generation
+            imagen_model: Imagen model to use for image generation
             default_face_method: Default anonymization for faces (BLUR or INPAINT)
             default_text_method: Default anonymization for text PII (MASK or REDACT)
             upload_dir: Directory to save uploaded images
@@ -53,9 +59,13 @@ class PrivacyPipeline:
         # Initialize Gemini detector
         self.detector = GeminiDetector(
             api_key=gemini_api_key,
-            min_confidence=min_confidence
+            min_confidence=min_confidence,
+            detection_model=detection_model,
+            generation_model=generation_model,
+            imagen_model=imagen_model
         )
         self.anonymizer = Anonymizer(
+            generator=self.detector,
             default_face_method=default_face_method,
             default_text_method=default_text_method
         )

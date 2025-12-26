@@ -29,16 +29,8 @@ class DetectionType(str, Enum):
 
 class ReplacementMethod(str, Enum):
     """Methods for replacing detected regions."""
-    # Text replacements
-    MASK = "mask"  # Replace with ***
-    SYNTHETIC_TEXT = "synthetic_text"  # Generate synthetic text
-    REDACT = "redact"  # Black box
-    
-    # Face replacements
+    GENERATE = "generate"  # Generative fill using Gemini
     BLUR = "blur"  # Gaussian blur
-    PIXELATE = "pixelate"  # Pixelation
-    EMOJI = "emoji"  # Replace with emoji
-    INPAINT = "inpaint"  # AI-based inpainting
     BLACK_BOX = "black_box"  # Black rectangle
 
 

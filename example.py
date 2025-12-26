@@ -33,8 +33,6 @@ def main():
     print("\n2. Initializing pipeline with Gemini Vision API...")
     pipeline = PrivacyPipeline(
         min_confidence=0.7,
-        default_face_method=ReplacementMethod.BLUR,
-        default_text_method=ReplacementMethod.MASK
     )
     print("✓ Pipeline initialized")
     
@@ -83,7 +81,7 @@ def main():
         replacements.append(ReplacementRequest(
             detection_id=pii.detection_id,
             detection_type="pii",
-            method=ReplacementMethod.MASK
+            method=ReplacementMethod.GENERATE
         ))
     
     # Blur all faces
