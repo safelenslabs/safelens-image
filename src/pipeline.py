@@ -36,8 +36,8 @@ class PrivacyPipeline:
         gemini_api_key: Optional[str] = None,
         min_confidence: float = 0.7,
         detection_model: str = "gemini-3-flash-preview",
-        generation_model: str = "gemini-1.5-flash",
-        imagen_model: str = "imagen-3.0-generate-002",
+        # imagen_model: str = "gemini-3-pro-image-preview",
+        imagen_model: str = "gemini-2.5-flash-image",
         default_face_method: ReplacementMethod = ReplacementMethod.BLUR,
         default_text_method: ReplacementMethod = ReplacementMethod.BLUR,
         upload_dir: str = "uploads",
@@ -50,7 +50,6 @@ class PrivacyPipeline:
             gemini_api_key: Google Gemini API key (if None, will read from env)
             min_confidence: Minimum confidence for detections
             detection_model: Gemini model to use for detection
-            generation_model: Gemini model to use for describing context for generation
             imagen_model: Imagen model to use for image generation
             default_face_method: Default anonymization for faces (BLUR or INPAINT)
             default_text_method: Default anonymization for text PII (MASK or REDACT)
@@ -67,7 +66,6 @@ class PrivacyPipeline:
         # Initialize Image Generator
         self.generator = ImageGenerator(
             api_key=gemini_api_key,
-            generation_model=generation_model,
             imagen_model=imagen_model
         )
         
