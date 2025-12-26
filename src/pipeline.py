@@ -226,32 +226,3 @@ class PrivacyPipeline:
             detections.face_detections,
             show_labels=show_labels,
         )
-
-    def clear_cache(self, image_id: Optional[str] = None):
-        """
-        Clear cached images and detections (also deletes files from disk).
-
-        Args:
-            image_id: Specific image to clear, or None to clear all
-        """
-        if image_id:
-            self._image_cache.pop(image_id, None)
-            self._detection_cache.pop(image_id, None)
-
-            # Delete files from disk
-            upload_path = self.upload_dir / f"{image_id}.png"
-            output_path = self.output_dir / f"{image_id}_anonymized.png"
-
-            if upload_path.exists():
-                upload_path.unlink()
-            if output_path.exists():
-                output_path.unlink()
-        else:
-            self._image_cache.clear()
-            self._detection_cache.clear()
-
-            # Delete all files from disk
-            for file in self.upload_dir.glob("*.png"):
-                file.unlink()
-            for file in self.output_dir.glob("*.png"):
-                file.unlink()

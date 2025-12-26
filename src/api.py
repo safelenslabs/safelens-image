@@ -77,8 +77,6 @@ async def lifespan(app: FastAPI):
 
     # Cleanup
     logger.info("Shutting down...")
-    if pipeline:
-        pipeline.clear_cache()
 
 
 # Create FastAPI app
@@ -92,7 +90,10 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=[
+        "*",
+        "chrome-extension://dpnlnlbioefgkmogjamfapokgnofcobe"
+    ],  # Configure appropriately for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -387,46 +388,6 @@ async def download_image(image_id: str, quality: str = "high", format: str = "pn
         raise HTTPException(
             status_code=500, detail=f"Error downloading image: {str(e)}"
         )
-
-
-@app.delete("/clear/{image_id}")
-async def clear_image_cache(image_id: str) -> dict:
-    """
-    Clear cached image data.
-
-    Args:
-        image_id: ID of the image to clear
-
-    Returns:
-        Success message
-    """
-    try:
-        pipeline.clear_cache(image_id)
-        # Also clear thumbnail
-        pipeline.clear_cache(f"{image_id}_low")
-
-        return {"message": f"Cache cleared for image {image_id}"}
-
-    except Exception as e:
-        logger.error(f"Error clearing cache: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
-
-
-@app.delete("/clear")
-async def clear_all_cache() -> dict:
-    """
-    Clear all cached images and detections.
-
-    Returns:
-        Success message
-    """
-    try:
-        pipeline.clear_cache()
-        return {"message": "All cache cleared"}
-
-    except Exception as e:
-        logger.error(f"Error clearing cache: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
 
 
 if __name__ == "__main__":
