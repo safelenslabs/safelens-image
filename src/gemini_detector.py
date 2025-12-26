@@ -215,10 +215,14 @@ class GeminiDetector:
 
             # Filter by confidence threshold (different for faces vs text)
             if detection_type == "face" and confidence < self.min_face_confidence:
-                print(f"  [INFO] Face confidence {confidence} below threshold {self.min_face_confidence}, skipping")
+                print(
+                    f"  [INFO] Face confidence {confidence} below threshold {self.min_face_confidence}, skipping"
+                )
                 continue
             elif detection_type == "text_pii" and confidence < self.min_text_confidence:
-                print(f"  [INFO] Text PII confidence {confidence} below threshold {self.min_text_confidence}, skipping")
+                print(
+                    f"  [INFO] Text PII confidence {confidence} below threshold {self.min_text_confidence}, skipping"
+                )
                 continue
 
             # Parse bbox [ymin, xmin, ymax, xmax]

@@ -26,7 +26,7 @@ class ImageGenerator:
 
         Args:
             api_key: Google AI API key
-            imagen_model: Model to use for image generation (default: gemini-3-pro-image-preview)
+            imagen_model: Model to use for image generation (default: gemini-2.5-flash-image)
             mask_padding: Padding (in pixels) to add around the bbox for better context (default: 10)
         """
         api_key = api_key or os.getenv("GEMINI_API_KEY")

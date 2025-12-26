@@ -1,0 +1,514 @@
+openapi: 3.0.3
+info:
+  title: SaveLens Image Privacy Sanitization API
+  description: |
+    Privacy-safe image sanitization API with PII detection and face detection using Google Gemini Vision API.
+
+    ## Features
+    - Detect PII (phone numbers, emails, addresses, names, license plates, etc.)
+    - Detect human faces
+    - Multiple anonymization methods (AI generation, blur, black box, mosaic)
+    - Batch processing support
+
+    ## Interactive Documentation
+    - **Swagger UI**: http://localhost:8000/docs
+    - **ReDoc**: http://localhost:8000/redoc
+  version: 0.1.0
+  contact:
+    name: SaveLens Support
+    email: support@example.com
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+
+tags:
+  - name: health
+    description: Health check endpoints
+  - name: images
+    description: Image upload and download operations
+  - name: detection
+    description: PII and face detection operations
+  - name: anonymization
+    description: Image anonymization operations
+  - name: cache
+    description: Cache management operations
+
+paths:
+  /:
+    get:
+      tags:
+        - health
+      summary: Health Check
+      description: Check if the API is running
+      operationId: health_check
+      responses:
+        "200":
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service:
+                    type: string
+                    example: SaveLens Image Privacy Sanitization API
+                  version:
+                    type: string
+                    example: 0.1.0
+                  status:
+                    type: string
+                    example: healthy
+
+  /upload:
+    post:
+      tags:
+        - images
+      summary: Upload Image
+      description: Upload an image and receive a unique UUID for later processing
+      operationId: upload_image
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Image file to upload (PNG, JPG, JPEG, WEBP)
+              required:
+                - file
+      responses:
+        "200":
+          description: Image uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /detect/{image_id}:
+    post:
+      tags:
+        - detection
+      summary: Detect PII and Faces
+      description: Run detection on an uploaded image to find PII and faces
+      operationId: detect_from_uuid
+      parameters:
+        - name: image_id
+          in: path
+          required: true
+          description: UUID returned from upload endpoint
+          schema:
+            type: string
+            format: uuid
+            example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "200":
+          description: Detection completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetectionResult"
+        "404":
+          description: Image not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /anonymize:
+    post:
+      tags:
+        - anonymization
+      summary: Anonymize Image
+      description: Apply anonymization to specific regions using bounding boxes
+      operationId: anonymize_with_bboxes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BboxAnonymizeRequest"
+      responses:
+        "200":
+          description: Anonymization completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnonymizeResponse"
+        "404":
+          description: Image or detections not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /download/{image_id}:
+    get:
+      tags:
+        - images
+      summary: Download Image
+      description: Download the original or anonymized image
+      operationId: download_image
+      parameters:
+        - name: image_id
+          in: path
+          required: true
+          description: UUID of the image
+          schema:
+            type: string
+            format: uuid
+            example: 550e8400-e29b-41d4-a716-446655440000
+        - name: anonymized
+          in: query
+          required: false
+          description: Download anonymized version
+          schema:
+            type: boolean
+            default: true
+        - name: format
+          in: query
+          required: false
+          description: Output format
+          schema:
+            type: string
+            enum: [png, jpg, jpeg, webp]
+            default: png
+      responses:
+        "200":
+          description: Image file
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Image not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Invalid format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /clear/{image_id}:
+    delete:
+      tags:
+        - cache
+      summary: Clear Image Cache
+      description: Remove a specific image and its detection data from cache
+      operationId: clear_image_cache
+      parameters:
+        - name: image_id
+          in: path
+          required: true
+          description: UUID of the image to clear
+          schema:
+            type: string
+            format: uuid
+            example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "200":
+          description: Cache cleared successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Cache cleared for image 550e8400-e29b-41d4-a716-446655440000
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /clear:
+    delete:
+      tags:
+        - cache
+      summary: Clear All Cache
+      description: Remove all cached images and detection data
+      operationId: clear_all_cache
+      responses:
+        "200":
+          description: All cache cleared successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: All cache cleared
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    BoundingBox:
+      type: object
+      description: Bounding box coordinates in pixels
+      properties:
+        x:
+          type: integer
+          description: X coordinate (top-left corner)
+          example: 100
+        y:
+          type: integer
+          description: Y coordinate (top-left corner)
+          example: 200
+        width:
+          type: integer
+          description: Width of the bounding box
+          example: 150
+        height:
+          type: integer
+          description: Height of the bounding box
+          example: 30
+      required:
+        - x
+        - y
+        - width
+        - height
+
+    PIIType:
+      type: string
+      description: Types of personally identifiable information
+      enum:
+        - phone
+        - email
+        - address
+        - name
+        - license_plate
+        - id_number
+        - credit_card
+        - date_of_birth
+        - other
+
+    ReplacementMethod:
+      type: string
+      description: Anonymization method to apply
+      enum:
+        - generate
+        - blur
+        - black_box
+        - mosaic
+      default: generate
+
+    PIIDetection:
+      type: object
+      description: PII detection result
+      properties:
+        detection_id:
+          type: string
+          description: Unique identifier for the detection
+          example: pii-001
+        detection_type:
+          type: string
+          enum: [text_pii]
+          example: text_pii
+        pii_type:
+          $ref: "#/components/schemas/PIIType"
+        text:
+          type: string
+          description: Detected text content
+          example: 010-1234-5678
+        bbox:
+          $ref: "#/components/schemas/BoundingBox"
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Confidence score of the detection
+          example: 0.95
+      required:
+        - detection_id
+        - detection_type
+        - pii_type
+        - bbox
+        - confidence
+
+    FaceDetection:
+      type: object
+      description: Face detection result
+      properties:
+        detection_id:
+          type: string
+          description: Unique identifier for the detection
+          example: face-001
+        detection_type:
+          type: string
+          enum: [face]
+          example: face
+        bbox:
+          $ref: "#/components/schemas/BoundingBox"
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Confidence score of the detection
+          example: 0.98
+      required:
+        - detection_id
+        - detection_type
+        - bbox
+        - confidence
+
+    DetectionResult:
+      type: object
+      description: Complete detection result for an image
+      properties:
+        image_id:
+          type: string
+          format: uuid
+          description: UUID of the processed image
+          example: 550e8400-e29b-41d4-a716-446655440000
+        image_width:
+          type: integer
+          description: Width of the image in pixels
+          example: 1920
+        image_height:
+          type: integer
+          description: Height of the image in pixels
+          example: 1080
+        pii_detections:
+          type: array
+          description: List of detected PII regions
+          items:
+            $ref: "#/components/schemas/PIIDetection"
+        face_detections:
+          type: array
+          description: List of detected face regions
+          items:
+            $ref: "#/components/schemas/FaceDetection"
+      required:
+        - image_id
+        - image_width
+        - image_height
+        - pii_detections
+        - face_detections
+
+    UploadResponse:
+      type: object
+      description: Response from image upload
+      properties:
+        image_id:
+          type: string
+          format: uuid
+          description: UUID assigned to the uploaded image
+          example: 550e8400-e29b-41d4-a716-446655440000
+        message:
+          type: string
+          description: Success message
+          example: Image uploaded successfully
+      required:
+        - image_id
+        - message
+
+    BboxAnonymizeRequest:
+      type: object
+      description: Request to anonymize specific regions
+      properties:
+        image_id:
+          type: string
+          format: uuid
+          description: UUID of the image to anonymize
+          example: 550e8400-e29b-41d4-a716-446655440000
+        bboxes:
+          type: array
+          description: List of bounding boxes to anonymize
+          items:
+            $ref: "#/components/schemas/BoundingBox"
+          minItems: 1
+        method:
+          $ref: "#/components/schemas/ReplacementMethod"
+      required:
+        - image_id
+        - bboxes
+
+    AnonymizeResponse:
+      type: object
+      description: Response from anonymization operation
+      properties:
+        image_id:
+          type: string
+          format: uuid
+          description: UUID of the anonymized image
+          example: 550e8400-e29b-41d4-a716-446655440000
+        success:
+          type: boolean
+          description: Whether anonymization was successful
+          example: true
+        message:
+          type: string
+          description: Status message
+          example: Successfully anonymized 2 regions
+        processed_count:
+          type: integer
+          description: Number of regions processed
+          example: 2
+      required:
+        - image_id
+        - success
+        - message
+        - processed_count
+
+    ErrorResponse:
+      type: object
+      description: Error response
+      properties:
+        detail:
+          type: string
+          description: Error message describing what went wrong
+          example: Image not found
+      required:
+        - detail

@@ -26,9 +26,9 @@ class Anonymizer:
         """Initialize anonymizer with default settings.
 
         Args:
-            generator: Object with generate_replacement method (e.g. GeminiDetector)
-            default_face_method: Default method for face anonymization (BLUR or INPAINT recommended)
-            default_text_method: Default method for text PII anonymization (MASK or REDACT recommended)
+            generator: Object with generate_replacement method (e.g. ImageGenerator)
+            default_face_method: Default method for face anonymization (BLUR)
+            default_text_method: Default method for text PII anonymization (GENERATE)
         """
         self.generator = generator
         self.default_face_method = default_face_method
@@ -118,6 +118,8 @@ class Anonymizer:
             return self._blur_region(image, region)
         elif method == ReplacementMethod.BLACK_BOX:
             return self._black_box(image, region)
+        elif method == ReplacementMethod.MOSAIC:
+            return self._mosaic_region(image, region)
         elif method == ReplacementMethod.GENERATE:
             # Individual GENERATE fallback
             if self.generator and hasattr(self.generator, "generate_replacement"):
@@ -162,6 +164,36 @@ class Anonymizer:
 
         # Paste back
         result.paste(blurred, (x1, y1))
+
+        return result
+
+    def _mosaic_region(
+        self, image: Image.Image, region: BoundingBox, pixel_size: int = 10
+    ) -> Image.Image:
+        """Apply mosaic/pixelation effect to the region."""
+        result = image.copy()
+
+        # Get bounding box coordinates
+        x1, y1, x2, y2 = region.to_xyxy()
+
+        # Extract region
+        region_crop = result.crop((x1, y1, x2, y2))
+        region_width, region_height = region_crop.size
+
+        # Skip if region is too small
+        if region_width < pixel_size or region_height < pixel_size:
+            return result
+
+        # Downscale to create mosaic effect
+        small_width = max(1, region_width // pixel_size)
+        small_height = max(1, region_height // pixel_size)
+        small = region_crop.resize((small_width, small_height), Image.NEAREST)
+
+        # Upscale back to original size
+        mosaic = small.resize((region_width, region_height), Image.NEAREST)
+
+        # Paste back
+        result.paste(mosaic, (x1, y1))
 
         return result
 

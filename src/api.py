@@ -26,7 +26,10 @@ from src.models import (
     AnonymizationRequest,
     AnonymizationResult,
     ReplacementMethod,
+    BoundingBox,
 )
+from pydantic import BaseModel
+from typing import List
 
 # Load environment variables from .env file
 load_dotenv()
@@ -53,14 +56,14 @@ async def lifespan(app: FastAPI):
 
     # Get default methods from environment (optional)
     default_face_method = os.getenv("DEFAULT_FACE_METHOD", "blur").upper()
-    default_text_method = os.getenv("DEFAULT_TEXT_METHOD", "mask").upper()
+    default_text_method = os.getenv("DEFAULT_TEXT_METHOD", "generate").upper()
 
     # Map to enum
     face_method = getattr(
         ReplacementMethod, default_face_method, ReplacementMethod.BLUR
     )
     text_method = getattr(
-        ReplacementMethod, default_text_method, ReplacementMethod.MASK
+        ReplacementMethod, default_text_method, ReplacementMethod.GENERATE
     )
 
     # Initialize with Gemini detector
@@ -107,22 +110,48 @@ async def root():
     }
 
 
-@app.post("/api/v1/detect", response_model=DetectionResult)
-async def detect_pii_and_faces(
-    file: UploadFile = File(..., description="Image file to analyze"),
-) -> DetectionResult:
+# ===== API Endpoints =====
+
+
+class UploadResponse(BaseModel):
+    """Response model for image upload."""
+
+    image_id: str
+    message: str
+
+
+class BboxAnonymizeRequest(BaseModel):
+    """Request model for bbox-based anonymization."""
+
+    image_id: str
+    bboxes: List[BoundingBox]
+    method: ReplacementMethod = ReplacementMethod.GENERATE
+
+
+class AnonymizeResponse(BaseModel):
+    """Response model for anonymization."""
+
+    image_id: str
+    success: bool
+    message: str
+    processed_count: int
+
+
+@app.post("/upload", response_model=UploadResponse)
+async def upload_image(
+    file: UploadFile = File(..., description="Image file to upload"),
+) -> UploadResponse:
     """
-    Upload an image and detect PII and faces.
+    1. Upload an image and get a UUID.
 
     This endpoint:
-    1. Accepts an image file
-    2. Runs OCR to extract text
-    3. Classifies PII in the text
-    4. Detects faces (no identity recognition)
-    5. Returns all detections with bounding boxes
+    - Accepts an image file
+    - Generates a unique UUID
+    - Stores the image in cache
+    - Returns the UUID for later processing
 
     Returns:
-        DetectionResult with image_id and all detected regions
+        UploadResponse with image_id (UUID)
     """
     try:
         # Read and validate image
@@ -133,56 +162,148 @@ async def detect_pii_and_faces(
         if image.mode != "RGB":
             image = image.convert("RGB")
 
-        logger.info(f"Processing image: {file.filename}, size: {image.size}")
+        logger.info(f"Uploading image: {file.filename}, size: {image.size}")
 
-        # Run detection pipeline
-        result = pipeline.detect(image)
+        # Generate UUID and store image
+        import uuid
+
+        image_id = str(uuid.uuid4())
+        pipeline._image_cache[image_id] = image.copy()
+
+        # Save to disk
+        image_path = pipeline.upload_dir / f"{image_id}.png"
+        image.save(image_path, "PNG")
+
+        logger.info(f"Image uploaded with ID: {image_id}")
+
+        return UploadResponse(image_id=image_id, message=f"Image uploaded successfully")
+
+    except Exception as e:
+        logger.error(f"Error uploading image: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error uploading image: {str(e)}")
+
+
+@app.post("/detect/{image_id}", response_model=DetectionResult)
+async def detect_from_uuid(image_id: str) -> DetectionResult:
+    """
+    2. Detect PII and faces from uploaded image UUID.
+
+    This endpoint:
+    - Takes an image_id (UUID) from upload step
+    - Runs detection on the stored image
+    - Returns all detected PII and faces with bounding boxes
+
+    Returns:
+        DetectionResult with all detections
+    """
+    try:
+        # Retrieve image from cache
+        image = pipeline._image_cache.get(image_id)
+        if image is None:
+            raise HTTPException(status_code=404, detail=f"Image not found: {image_id}")
+
+        logger.info(f"Running detection on image: {image_id}")
+
+        # Run detection
+        result = pipeline.detect(image, image_id=image_id)
 
         logger.info(
-            f"Detection complete for {result.image_id}: "
+            f"Detection complete for {image_id}: "
             f"{len(result.pii_detections)} PII, {len(result.face_detections)} faces"
         )
 
         return result
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error processing image: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
+        logger.error(f"Error detecting image: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error detecting image: {str(e)}")
 
 
-@app.post("/api/v1/anonymize", response_model=AnonymizationResult)
-async def anonymize_image(request: AnonymizationRequest) -> AnonymizationResult:
+@app.post("/anonymize", response_model=AnonymizeResponse)
+async def anonymize_with_bboxes(request: BboxAnonymizeRequest) -> AnonymizeResponse:
     """
-    Apply anonymization to selected detections.
+    3. Anonymize image regions using bounding box coordinates.
 
     This endpoint:
-    1. Takes a list of detection IDs and replacement methods
-    2. Applies the specified anonymization techniques
-    3. Returns metadata about the operation
-
-    Use GET /api/v1/download/{image_id} to download the anonymized image.
+    - Takes image_id (UUID) and list of bounding boxes
+    - Applies anonymization (GENERATE or BLUR) to each bbox region
+    - Returns completion status
 
     Returns:
-        AnonymizationResult with applied replacement IDs
+        AnonymizeResponse with success status
     """
     try:
+        # Retrieve image and detections from cache
+        image = pipeline._image_cache.get(request.image_id)
+        if image is None:
+            raise HTTPException(
+                status_code=404, detail=f"Image not found: {request.image_id}"
+            )
+
+        detections = pipeline._detection_cache.get(request.image_id)
+        if detections is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No detections found for image: {request.image_id}. Run /detect first.",
+            )
+
         logger.info(
-            f"Anonymizing image {request.image_id} with {len(request.replacements)} replacements"
+            f"Anonymizing image {request.image_id} with {len(request.bboxes)} bboxes"
         )
 
-        # Apply anonymization
-        anonymized_image, result = pipeline.anonymize(request)
+        # Prepare replacements for anonymizer
+        # Match bboxes to detections or create generic replacements
+        replacements = []
+        for bbox in request.bboxes:
+            # Try to find matching detection to get label
+            label = None
+            for pii in detections.pii_detections:
+                if (
+                    pii.bbox.x == bbox.x
+                    and pii.bbox.y == bbox.y
+                    and pii.bbox.width == bbox.width
+                    and pii.bbox.height == bbox.height
+                ):
+                    label = pii.pii_type
+                    break
 
-        # Store the anonymized image back in cache
-        # This allows downloading it later
+            if label is None:
+                for face in detections.face_detections:
+                    if (
+                        face.bbox.x == bbox.x
+                        and face.bbox.y == bbox.y
+                        and face.bbox.width == bbox.width
+                        and face.bbox.height == bbox.height
+                    ):
+                        label = "face"
+                        break
+
+            # Add replacement (bbox, method, custom_data, label)
+            replacements.append((bbox, request.method, None, label))
+
+        # Apply anonymization
+        anonymized_image = pipeline.anonymizer.anonymize_image(image, replacements)
+
+        # Store anonymized image
         pipeline._image_cache[f"{request.image_id}_anonymized"] = anonymized_image
+
+        # Save to disk
+        output_path = pipeline.output_dir / f"{request.image_id}_anonymized.png"
+        anonymized_image.save(output_path, "PNG")
 
         logger.info(f"Anonymization complete for {request.image_id}")
 
-        return result
+        return AnonymizeResponse(
+            image_id=request.image_id,
+            success=True,
+            message=f"Successfully anonymized {len(request.bboxes)} regions",
+            processed_count=len(request.bboxes),
+        )
 
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error anonymizing image: {str(e)}", exc_info=True)
         raise HTTPException(
@@ -190,63 +311,34 @@ async def anonymize_image(request: AnonymizationRequest) -> AnonymizationResult:
         )
 
 
-@app.get("/api/v1/preview/{image_id}")
-async def get_preview(image_id: str, show_labels: bool = True) -> Response:
+@app.get("/download/{image_id}")
+async def download_image(
+    image_id: str, anonymized: bool = True, format: str = "png"
+) -> Response:
     """
-    Get a preview image with detection bounding boxes drawn.
+    4. Download image by UUID.
 
     Args:
-        image_id: ID of the image from detection step
-        show_labels: Whether to show labels on bounding boxes
-
-    Returns:
-        PNG image with bounding boxes
-    """
-    try:
-        preview = pipeline.create_preview(image_id, show_labels=show_labels)
-
-        if preview is None:
-            raise HTTPException(status_code=404, detail="Image not found")
-
-        # Convert to bytes
-        img_byte_arr = io.BytesIO()
-        preview.save(img_byte_arr, format="PNG")
-        img_byte_arr.seek(0)
-
-        return StreamingResponse(img_byte_arr, media_type="image/png")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error generating preview: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Error generating preview: {str(e)}"
-        )
-
-
-@app.get("/api/v1/download/{image_id}")
-async def download_anonymized_image(image_id: str, format: str = "png") -> Response:
-    """
-    Download the anonymized image.
-
-    Args:
-        image_id: ID of the image (from detection step)
+        image_id: UUID of the image
+        anonymized: Whether to download anonymized version (default: True)
         format: Output format (png, jpg, webp)
 
     Returns:
-        Anonymized image file
+        Image file (original or anonymized)
     """
     try:
-        # Look for the anonymized version
-        anonymized_key = f"{image_id}_anonymized"
-        image = pipeline._image_cache.get(anonymized_key)
-
-        if image is None:
-            # Fallback to original if not anonymized yet
+        # Determine which image to download
+        if anonymized:
+            image = pipeline._image_cache.get(f"{image_id}_anonymized")
+            if image is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Anonymized image not found. Run /anonymize first.",
+                )
+        else:
             image = pipeline._image_cache.get(image_id)
-
-        if image is None:
-            raise HTTPException(status_code=404, detail="Image not found")
+            if image is None:
+                raise HTTPException(status_code=404, detail="Image not found")
 
         # Validate format
         format = format.lower()
@@ -255,28 +347,30 @@ async def download_anonymized_image(image_id: str, format: str = "png") -> Respo
 
         # Convert format
         if format in ["jpg", "jpeg"]:
-            format = "JPEG"
+            format_type = "JPEG"
             media_type = "image/jpeg"
             # Convert RGBA to RGB for JPEG
             if image.mode == "RGBA":
                 image = image.convert("RGB")
         elif format == "webp":
-            format = "WEBP"
+            format_type = "WEBP"
             media_type = "image/webp"
         else:
-            format = "PNG"
+            format_type = "PNG"
             media_type = "image/png"
 
         # Convert to bytes
         img_byte_arr = io.BytesIO()
-        image.save(img_byte_arr, format=format, quality=95)
+        image.save(img_byte_arr, format=format_type, quality=95)
         img_byte_arr.seek(0)
+
+        prefix = "anonymized_" if anonymized else "original_"
 
         return StreamingResponse(
             img_byte_arr,
             media_type=media_type,
             headers={
-                "Content-Disposition": f"attachment; filename=anonymized_{image_id}.{format.lower()}"
+                "Content-Disposition": f"attachment; filename={prefix}{image_id}.{format.lower()}"
             },
         )
 
@@ -289,7 +383,7 @@ async def download_anonymized_image(image_id: str, format: str = "png") -> Respo
         )
 
 
-@app.delete("/api/v1/clear/{image_id}")
+@app.delete("/clear/{image_id}")
 async def clear_image_cache(image_id: str) -> dict:
     """
     Clear cached image and detection data.
@@ -312,7 +406,7 @@ async def clear_image_cache(image_id: str) -> dict:
         raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
 
 
-@app.delete("/api/v1/clear")
+@app.delete("/clear")
 async def clear_all_cache() -> dict:
     """
     Clear all cached images and detections.

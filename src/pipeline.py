@@ -6,7 +6,14 @@ import uuid
 from pathlib import Path
 from typing import Dict, Optional
 from PIL import Image
-from .config import MIN_CONFIDENCE, DEFAULT_FACE_METHOD, DEFAULT_TEXT_METHOD
+from .config import (
+    DEFAULT_FACE_METHOD,
+    DEFAULT_TEXT_METHOD,
+    MIN_FACE_CONFIDENCE,
+    MIN_TEXT_CONFIDENCE,
+    DETECTION_MODEL,
+    IMAGEN_MODEL,
+)
 from .models import (
     DetectionResult,
     PIIDetection,
@@ -34,10 +41,10 @@ class PrivacyPipeline:
     def __init__(
         self,
         gemini_api_key: Optional[str] = None,
-        min_confidence: float = MIN_CONFIDENCE,
-        detection_model: str = "gemini-3-flash-preview",
-        imagen_model: str = "gemini-3-pro-image-preview",
-        # imagen_model: str = "gemini-2.5-flash-image",
+        min_face_confidence: float = MIN_FACE_CONFIDENCE,
+        min_text_confidence: float = MIN_TEXT_CONFIDENCE,
+        detection_model: str = DETECTION_MODEL,
+        imagen_model: str = IMAGEN_MODEL,
         default_face_method: ReplacementMethod = DEFAULT_FACE_METHOD,
         default_text_method: ReplacementMethod = DEFAULT_TEXT_METHOD,
         upload_dir: str = "uploads",
@@ -48,18 +55,20 @@ class PrivacyPipeline:
 
         Args:
             gemini_api_key: Google Gemini API key (if None, will read from env)
-            min_confidence: Minimum confidence for detections
+            min_face_confidence: Minimum confidence for face detections
+            min_text_confidence: Minimum confidence for text PII detections
             detection_model: Gemini model to use for detection
             imagen_model: Imagen model to use for image generation
-            default_face_method: Default anonymization for faces (BLUR or INPAINT)
-            default_text_method: Default anonymization for text PII (MASK or REDACT)
+            default_face_method: Default anonymization for faces (BLUR or GENERATE)
+            default_text_method: Default anonymization for text PII (GENERATE or BLACK_BOX)
             upload_dir: Directory to save uploaded images
             output_dir: Directory to save anonymized images
         """
         # Initialize Gemini detector
         self.detector = GeminiDetector(
             api_key=gemini_api_key,
-            min_confidence=min_confidence,
+            min_face_confidence=min_face_confidence,
+            min_text_confidence=min_text_confidence,
             detection_model=detection_model,
         )
 

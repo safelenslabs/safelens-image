@@ -50,6 +50,7 @@ class ReplacementMethod(str, Enum):
     GENERATE = "generate"  # Generative fill using Gemini
     BLUR = "blur"  # Gaussian blur
     BLACK_BOX = "black_box"  # Black rectangle
+    MOSAIC = "mosaic"  # Pixelated mosaic effect
 
 
 class Polygon(BaseModel):
