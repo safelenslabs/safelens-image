@@ -39,14 +39,14 @@ class Anonymizer:
     def anonymize_image(
         self,
         image: Image.Image,
-        replacements: List[Tuple[BoundingBox, ReplacementMethod, Optional[str]]]
+        replacements: List[Tuple[BoundingBox, ReplacementMethod, Optional[str], Optional[str]]]
     ) -> Image.Image:
         """
         Apply multiple anonymization replacements to an image.
         
         Args:
             image: Original PIL Image
-            replacements: List of (bbox, method, custom_data) tuples
+            replacements: List of (bbox, method, custom_data, label) tuples
             
         Returns:
             Anonymized PIL Image
@@ -54,8 +54,13 @@ class Anonymizer:
         # Work on a copy
         result = image.copy()
         
-        for region, method, custom_data in replacements:
-            result = self._apply_replacement(result, region, method, custom_data)
+        for item in replacements:
+            if len(item) == 4:
+                region, method, custom_data, label = item
+            else:
+                region, method, custom_data = item
+                label = None
+            result = self._apply_replacement(result, region, method, custom_data, label)
         
         return result
     
@@ -64,12 +69,13 @@ class Anonymizer:
         image: Image.Image,
         region: BoundingBox,
         method: ReplacementMethod,
-        custom_data: Optional[str] = None
+        custom_data: Optional[str] = None,
+        label: Optional[str] = None
     ) -> Image.Image:
         """Apply a single replacement to an image region."""
         
         if method == ReplacementMethod.GENERATE:
-            return self._generate_region(image, region)
+            return self._generate_region(image, region, label)
         elif method == ReplacementMethod.BLUR:
             return self._blur_region(image, region)
         elif method == ReplacementMethod.BLACK_BOX:
@@ -86,7 +92,7 @@ class Anonymizer:
         draw.rectangle([x1, y1, x2, y2], fill=255)
         return mask
     
-    def _generate_region(self, image: Image.Image, region: BoundingBox) -> Image.Image:
+    def _generate_region(self, image: Image.Image, region: BoundingBox, label: str = None) -> Image.Image:
         """Use generative AI to fill the region."""
         if not self.generator:
             print("Warning: No generator provided for GENERATE method. Falling back to BLUR.")
@@ -94,7 +100,7 @@ class Anonymizer:
         
         try:
             # Call generator to get a patch
-            patch = self.generator.generate_replacement(image, region)
+            patch = self.generator.generate_replacement(image, region, label)
             if patch:
                 result = image.copy()
                 x1, y1, x2, y2 = region.to_xyxy()

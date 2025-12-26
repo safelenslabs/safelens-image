@@ -36,9 +36,14 @@ class ImageGenerator:
         self.client = genai.Client(api_key=api_key)
         self.imagen_model = imagen_model
 
-    def generate_replacement(self, image: Image.Image, region: BoundingBox) -> Optional[Image.Image]:
+    def generate_replacement(self, image: Image.Image, region: BoundingBox, label: str = None) -> Optional[Image.Image]:
         """
         Generate a replacement patch for the given region using Gemini.
+        
+        Args:
+            image: Original image
+            region: Bounding box of the region to replace
+            label: Label of the object being replaced (e.g. "license_plate", "face")
         """
         try:
             # 1. Create mask for the region (white = area to edit)
@@ -58,6 +63,14 @@ class ImageGenerator:
                     "Do not change any other part of the image. Output only the modified image."
                 )
                 
+                if label:
+                    prompt_text += f" The masked area contained a {label}, please replace it with a natural background that fits the context."
+                
+                # Add coordinates to prompt
+                prompt_text += f" The coordinates of the area to be modified are: ({x1}, {y1}) to ({x2}, {y2})."
+
+                print(f"[DEBUG] Prompt: {prompt_text}")
+
                 response = self.client.models.generate_content(
                     model=self.imagen_model,
                     contents=[

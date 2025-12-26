@@ -163,7 +163,13 @@ class PrivacyPipeline:
             method = replacement_req.method
             custom_data = replacement_req.custom_text
             
-            replacements.append((bbox, method, custom_data))
+            label = None
+            if isinstance(detection, PIIDetection):
+                label = detection.pii_type
+            elif isinstance(detection, FaceDetection):
+                label = "face"
+            
+            replacements.append((bbox, method, custom_data, label))
             applied_ids.append(replacement_req.detection_id)
         
         # Apply anonymization
