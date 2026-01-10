@@ -64,8 +64,9 @@ credentials.json
 *.tmp
 *.bak
 *.swp
-sample_*.png
-anonymized_*.png
-preview_*.png
+
+uploads/
+outputs/
+temp/
 
 !public/*.jpg
