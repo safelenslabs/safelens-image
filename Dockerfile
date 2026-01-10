@@ -1,7 +1,6 @@
 # Builder stage
 FROM python:3.11-slim AS builder
 
-# Build-time deps (for numpy/opencv/pillow C-extension fallback)
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
@@ -16,7 +15,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Final runtime stage
 FROM python:3.11-slim
 
-# Runtime deps (OpenCV headless + Pillow)
 RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     libsm6 \
@@ -28,10 +26,11 @@ RUN useradd -m -u 1000 appuser
 WORKDIR /app
 
 COPY --from=builder /usr/local /usr/local
-COPY --chown=appuser:appuser . .
+COPY --chown=appuser:appuser . /app
 
-RUN mkdir -p uploads outputs temp public && \
-    chown -R appuser:appuser uploads outputs temp public
+RUN mkdir -p /app/uploads /app/outputs /app/temp /app/public && \
+    chown -R appuser:appuser /app/uploads /app/outputs /app/temp /app/public && \
+    chmod -R 775 /app/uploads /app/outputs /app/temp /app/public
 
 USER appuser
 

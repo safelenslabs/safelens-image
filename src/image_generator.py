@@ -75,7 +75,6 @@ class ImageGenerator:
             )
 
             # Debug: Save masked image
-            os.makedirs("temp", exist_ok=True)
             mask_uuid = uuid.uuid4()
             masked_path = f"temp/debug_masked_{mask_uuid}.png"
             masked_image.save(masked_path)
@@ -255,7 +254,6 @@ class ImageGenerator:
                             gen_img = Image.open(io.BytesIO(part.inline_data.data))
 
                             # Debug: Save generated image
-                            os.makedirs("temp", exist_ok=True)
                             debug_path = f"temp/debug_gen_{uuid.uuid4()}.png"
                             gen_img.save(debug_path)
                             print(f"[DEBUG] Saved generated image to {debug_path}")
@@ -341,7 +339,6 @@ class ImageGenerator:
                 )
 
             # Debug: Save masked image
-            os.makedirs("temp", exist_ok=True)
             mask_uuid = uuid.uuid4()
             masked_path = f"temp/debug_batch_masked_{mask_uuid}.png"
             masked_image.save(masked_path)

@@ -48,6 +48,12 @@ async def lifespan(app: FastAPI):
     global pipeline
     logger.info("Initializing Privacy Pipeline with Gemini Vision API...")
 
+    # Create required directories
+    directories = ["uploads", "temp", "outputs", "public"]
+    for directory in directories:
+        os.makedirs(directory, exist_ok=True)
+        logger.info(f"Ensured directory exists: {directory}")
+
     # Get API key from environment
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
