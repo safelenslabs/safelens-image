@@ -35,6 +35,7 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/${{ github.repository }}:latest
+          no-cache: true
 
       - name: Deploy to EC2
         env:
