@@ -49,9 +49,6 @@ jobs:
 
           ssh -i private_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << EOF
             cd $EC2_DEPLOY_PATH
-            echo "PWD: $(pwd)"
-            echo "FILES:"
-            ls -al
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull
             docker compose up -d
