@@ -14,6 +14,7 @@ load_dotenv()
 # Configuration
 IMAGE_PATH = "public/example1.jpg"  # Change this to use a different image
 
+
 def main():
     """Run the example pipeline with the specified image."""
     print("=" * 60)

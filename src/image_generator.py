@@ -91,13 +91,17 @@ class ImageGenerator:
                     "1. The ORIGINAL image (first image)\n"
                     "2. A MASKED version where certain areas are blacked out (second image)\n"
                 )
-                
+
                 # Check if we need to include a reference image for QR/barcode
                 reference_image = None
                 if label:
-                    label_str = label.value if isinstance(label, PIIType) else str(label).lower()
+                    label_str = (
+                        label.value
+                        if isinstance(label, PIIType)
+                        else str(label).lower()
+                    )
                     replacement_value = None
-                    
+
                     if isinstance(label, PIIType):
                         replacement_value = PII_REPLACEMENT_VALUES.get(label)
                     elif isinstance(label, str):
@@ -106,23 +110,35 @@ class ImageGenerator:
                             replacement_value = PII_REPLACEMENT_VALUES.get(pii_type)
                         except (ValueError, KeyError):
                             pass
-                    
+
                     # Load reference image if it's a path to QR/barcode
-                    if replacement_value and isinstance(replacement_value, str) and \
-                       (replacement_value.endswith('.png') or replacement_value.endswith('.jpg')):
+                    if (
+                        replacement_value
+                        and isinstance(replacement_value, str)
+                        and (
+                            replacement_value.endswith(".png")
+                            or replacement_value.endswith(".jpg")
+                        )
+                    ):
                         try:
-                            ref_path = replacement_value if os.path.isabs(replacement_value) else \
-                                      os.path.join(os.path.dirname(os.path.dirname(__file__)), replacement_value)
+                            ref_path = (
+                                replacement_value
+                                if os.path.isabs(replacement_value)
+                                else os.path.join(
+                                    os.path.dirname(os.path.dirname(__file__)),
+                                    replacement_value,
+                                )
+                            )
                             if os.path.exists(ref_path):
                                 reference_image = Image.open(ref_path)
                                 prompt_text += "3. A REFERENCE image showing the desired QR code or barcode design (third image)\n\n"
                                 print(f"[DEBUG] Loaded reference image from {ref_path}")
                         except Exception as e:
                             print(f"[WARNING] Failed to load reference image: {e}")
-                
+
                 if not reference_image:
                     prompt_text += "\n"
-                
+
                 prompt_text += (
                     "Your task: Use the original image as reference, and fill in the black areas in the masked image naturally and seamlessly. "
                     "The filled areas should match the surrounding context, lighting, texture, and overall composition perfectly. "
@@ -221,7 +237,7 @@ class ImageGenerator:
                     image,  # First: Original image
                     masked_image,  # Second: Masked image with black areas
                 ]
-                
+
                 # Add reference image if available (for QR/barcode)
                 if reference_image:
                     contents.append(reference_image)  # Third: Reference image
@@ -338,13 +354,17 @@ class ImageGenerator:
                 # Check if any region needs QR/barcode reference images
                 reference_images = []
                 reference_image_info = []  # Track which regions use which reference
-                
+
                 for i, info in enumerate(region_infos):
                     label = info["label"]
                     if label:
-                        label_str = label.value if isinstance(label, PIIType) else str(label).lower()
+                        label_str = (
+                            label.value
+                            if isinstance(label, PIIType)
+                            else str(label).lower()
+                        )
                         replacement_value = None
-                        
+
                         if isinstance(label, PIIType):
                             replacement_value = PII_REPLACEMENT_VALUES.get(label)
                         elif isinstance(label, str):
@@ -353,31 +373,49 @@ class ImageGenerator:
                                 replacement_value = PII_REPLACEMENT_VALUES.get(pii_type)
                             except (ValueError, KeyError):
                                 pass
-                        
+
                         # Check if it's a reference image path
-                        if replacement_value and isinstance(replacement_value, str) and \
-                           (replacement_value.endswith('.png') or replacement_value.endswith('.jpg')):
+                        if (
+                            replacement_value
+                            and isinstance(replacement_value, str)
+                            and (
+                                replacement_value.endswith(".png")
+                                or replacement_value.endswith(".jpg")
+                            )
+                        ):
                             try:
-                                ref_path = replacement_value if os.path.isabs(replacement_value) else \
-                                          os.path.join(os.path.dirname(os.path.dirname(__file__)), replacement_value)
+                                ref_path = (
+                                    replacement_value
+                                    if os.path.isabs(replacement_value)
+                                    else os.path.join(
+                                        os.path.dirname(os.path.dirname(__file__)),
+                                        replacement_value,
+                                    )
+                                )
                                 if os.path.exists(ref_path):
                                     ref_img = Image.open(ref_path)
                                     reference_images.append(ref_img)
-                                    reference_image_info.append((i, len(reference_images)))
-                                    print(f"[DEBUG] Loaded reference image from {ref_path} for region {i+1}")
+                                    reference_image_info.append(
+                                        (i, len(reference_images))
+                                    )
+                                    print(
+                                        f"[DEBUG] Loaded reference image from {ref_path} for region {i + 1}"
+                                    )
                             except Exception as e:
-                                print(f"[WARNING] Failed to load reference image for region {i+1}: {e}")
+                                print(
+                                    f"[WARNING] Failed to load reference image for region {i + 1}: {e}"
+                                )
 
                 prompt_text = (
                     "You are an expert image editor. I am providing you with images:\n"
                     "1. The ORIGINAL image (first image)\n"
                     "2. A MASKED version where multiple areas are blacked out (second image)\n"
                 )
-                
+
                 if reference_images:
                     for idx, _ in enumerate(reference_images, 1):
                         prompt_text += f"{idx + 2}. A REFERENCE image for QR code or barcode design (image {idx + 2})\n"
-                
+
                 prompt_text += (
                     "\nYour task: Use the original image as reference, and fill in ALL the black areas in the masked image naturally and seamlessly. "
                     "The filled areas should match the surrounding context, lighting, texture, and overall composition perfectly. "
@@ -429,14 +467,28 @@ class ImageGenerator:
                                 )
                             elif "qr" in label_lower or "qrcode" in label_lower:
                                 # Check if this region has a reference image
-                                ref_idx = next((ref_num for reg_i, ref_num in reference_image_info if reg_i == i-1), None)
+                                ref_idx = next(
+                                    (
+                                        ref_num
+                                        for reg_i, ref_num in reference_image_info
+                                        if reg_i == i - 1
+                                    ),
+                                    None,
+                                )
                                 if ref_idx:
                                     prompt_text += f"{i}. QR code - copy REFERENCE image {ref_idx + 2} EXACTLY as shown (same design, colors, pattern, size). Do not modify it\n"
                                 else:
                                     prompt_text += f"{i}. QR code - maintain exact original QR code as it was (design, colors, pattern, size)\n"
                             elif "barcode" in label_lower:
                                 # Check if this region has a reference image
-                                ref_idx = next((ref_num for reg_i, ref_num in reference_image_info if reg_i == i-1), None)
+                                ref_idx = next(
+                                    (
+                                        ref_num
+                                        for reg_i, ref_num in reference_image_info
+                                        if reg_i == i - 1
+                                    ),
+                                    None,
+                                )
                                 if ref_idx:
                                     prompt_text += f"{i}. Barcode - copy REFERENCE image {ref_idx + 2} EXACTLY as shown (same barcode type, colors, pattern, numbers, size). Do not modify it\n"
                                 else:
@@ -469,11 +521,13 @@ class ImageGenerator:
                     image,  # Original image
                     masked_image,  # Masked image with all black areas
                 ]
-                
+
                 # Add reference images if available
                 if reference_images:
                     contents.extend(reference_images)
-                    print(f"[DEBUG] Including {len(reference_images)} reference image(s) in batch API call")
+                    print(
+                        f"[DEBUG] Including {len(reference_images)} reference image(s) in batch API call"
+                    )
 
                 response = self.client.models.generate_content(
                     model=self.imagen_model,

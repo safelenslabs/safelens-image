@@ -92,7 +92,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "*",
-        "chrome-extension://*"
+        "chrome-extension://*",
     ],  # Configure appropriately for production
     allow_credentials=True,
     allow_methods=["*"],
@@ -102,11 +102,21 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    """Health check endpoint."""
+    """Root endpoint."""
     return {
         "service": "SafeLens Image Privacy Sanitization API",
         "version": "0.1.0",
         "status": "healthy",
+    }
+
+
+@app.get("/health")
+async def health():
+    """Health check endpoint for Docker and load balancers."""
+    return {
+        "status": "healthy",
+        "service": "safelens-image",
+        "version": "0.1.0"
     }
 
 
@@ -184,13 +194,15 @@ async def upload_image(
         if thumbnail.width > THUMBNAIL_MAX_WIDTH:
             ratio = THUMBNAIL_MAX_WIDTH / thumbnail.width
             new_height = int(thumbnail.height * ratio)
-            thumbnail = thumbnail.resize((THUMBNAIL_MAX_WIDTH, new_height), Image.Resampling.LANCZOS)
+            thumbnail = thumbnail.resize(
+                (THUMBNAIL_MAX_WIDTH, new_height), Image.Resampling.LANCZOS
+            )
         pipeline._image_cache[f"{image_id}_low"] = thumbnail
 
         # Save to disk (high quality)
         image_path = pipeline.upload_dir / f"{image_id}.png"
         image.save(image_path, "PNG")
-        
+
         # Save thumbnail
         thumbnail_path = pipeline.upload_dir / f"{image_id}_low.png"
         thumbnail.save(thumbnail_path, "PNG")
@@ -272,7 +284,7 @@ async def anonymize_with_bboxes(request: BboxAnonymizeRequest) -> AnonymizeRespo
         for region in request.regions:
             # Use the provided pii_type (no cache lookup needed)
             label = region.pii_type
-            
+
             # Add replacement (bbox, method, custom_data, label)
             replacements.append((region.bbox, request.method, None, label))
 
@@ -281,8 +293,9 @@ async def anonymize_with_bboxes(request: BboxAnonymizeRequest) -> AnonymizeRespo
 
         # Generate UUID for anonymized image
         import uuid
+
         anonymized_image_id = str(uuid.uuid4())
-        
+
         # Store anonymized image (high quality)
         pipeline._image_cache[anonymized_image_id] = anonymized_image
 
@@ -291,18 +304,22 @@ async def anonymize_with_bboxes(request: BboxAnonymizeRequest) -> AnonymizeRespo
         if thumbnail.width > THUMBNAIL_MAX_WIDTH:
             ratio = THUMBNAIL_MAX_WIDTH / thumbnail.width
             new_height = int(thumbnail.height * ratio)
-            thumbnail = thumbnail.resize((THUMBNAIL_MAX_WIDTH, new_height), Image.Resampling.LANCZOS)
+            thumbnail = thumbnail.resize(
+                (THUMBNAIL_MAX_WIDTH, new_height), Image.Resampling.LANCZOS
+            )
         pipeline._image_cache[f"{anonymized_image_id}_low"] = thumbnail
 
         # Save to disk (high quality)
         output_path = pipeline.output_dir / f"{anonymized_image_id}.png"
         anonymized_image.save(output_path, "PNG")
-        
+
         # Save thumbnail
         thumbnail_path = pipeline.output_dir / f"{anonymized_image_id}_low.png"
         thumbnail.save(thumbnail_path, "PNG")
 
-        logger.info(f"Anonymization complete: {request.image_id} -> {anonymized_image_id}")
+        logger.info(
+            f"Anonymization complete: {request.image_id} -> {anonymized_image_id}"
+        )
 
         return AnonymizeResponse(
             original_image_id=request.image_id,
@@ -322,7 +339,9 @@ async def anonymize_with_bboxes(request: BboxAnonymizeRequest) -> AnonymizeRespo
 
 
 @app.get("/download/{image_id}")
-async def download_image(image_id: str, quality: str = "high", format: str = "png") -> Response:
+async def download_image(
+    image_id: str, quality: str = "high", format: str = "png"
+) -> Response:
     """
     4. Download image by UUID.
 
@@ -337,8 +356,10 @@ async def download_image(image_id: str, quality: str = "high", format: str = "pn
     try:
         # Validate quality parameter
         if quality not in ["high", "low"]:
-            raise HTTPException(status_code=400, detail="Invalid quality. Use 'high' or 'low'")
-        
+            raise HTTPException(
+                status_code=400, detail="Invalid quality. Use 'high' or 'low'"
+            )
+
         # Get image from cache based on quality
         if quality == "low":
             image = pipeline._image_cache.get(f"{image_id}_low")
