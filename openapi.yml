@@ -33,11 +33,9 @@ tags:
     description: PII and face detection operations
   - name: anonymization
     description: Image anonymization operations
-  - name: cache
-    description: Cache management operations
 
 paths:
-  /:
+  /health:
     get:
       tags:
         - health
@@ -52,15 +50,15 @@ paths:
               schema:
                 type: object
                 properties:
-                  service:
-                    type: string
-                    example: SafeLens Image Privacy Sanitization API
-                  version:
-                    type: string
-                    example: 0.1.0
                   status:
                     type: string
                     example: healthy
+                  service:
+                    type: string
+                    example: safelens-image
+                  version:
+                    type: string
+                    example: 0.1.0
 
   /upload:
     post:
@@ -153,7 +151,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/AnonymizeResponse"
         "404":
-          description: Image or detections not found
+          description: Image not found
           content:
             application/json:
               schema:
@@ -189,27 +187,11 @@ paths:
             type: string
             enum: [high, low]
             default: high
-        - name: format
-          in: query
-          required: false
-          description: Output format
-          schema:
-            type: string
-            enum: [png, jpg, jpeg, webp]
-            default: png
       responses:
         "200":
-          description: Image file
+          description: PNG image file
           content:
             image/png:
-              schema:
-                type: string
-                format: binary
-            image/jpeg:
-              schema:
-                type: string
-                format: binary
-            image/webp:
               schema:
                 type: string
                 format: binary
@@ -220,70 +202,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "400":
-          description: Invalid format
+          description: Invalid quality parameter
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /clear/{image_id}:
-    delete:
-      tags:
-        - cache
-      summary: Clear Image Cache
-      description: Remove a specific image and its detection data from cache
-      operationId: clear_image_cache
-      parameters:
-        - name: image_id
-          in: path
-          required: true
-          description: UUID of the image to clear
-          schema:
-            type: string
-            format: uuid
-            example: 550e8400-e29b-41d4-a716-446655440000
-      responses:
-        "200":
-          description: Cache cleared successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Cache cleared for image 550e8400-e29b-41d4-a716-446655440000
-        "500":
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /clear:
-    delete:
-      tags:
-        - cache
-      summary: Clear All Cache
-      description: Remove all cached images and detection data
-      operationId: clear_all_cache
-      responses:
-        "200":
-          description: All cache cleared successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: All cache cleared
         "500":
           description: Internal server error
           content:
