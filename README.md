@@ -27,8 +27,22 @@ $ uv sync
 Create a `.env` file:
 
 ```bash
-GOOGLE_API_KEY=your_gemini_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
+S3_BUCKET_NAME=your-bucket-name
+S3_REGION_NAME=us-east-1
+AWS_ACCESS_KEY_ID=your_aws_access_key_id
+AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
 ```
+
+### Storage
+
+SafeLens Image uses Amazon S3 for image storage:
+- All images are uploaded to the specified S3 bucket
+- Images are organized with prefixes:
+  - `uploads/` - Original uploaded images
+  - `outputs/` - Anonymized images
+  - `temp/` - Temporary debug images
+- Requires AWS credentials with S3 read/write permissions
 
 ### 3. Run Server
 
@@ -41,3 +55,4 @@ $ uv run main.py
 - FastAPI - HTTP server
 - Google Gemini Vision API - PII/Face detection
 - OpenCV & Pillow - Image processing
+- Boto3 - AWS S3 integration

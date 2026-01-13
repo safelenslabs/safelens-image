@@ -65,8 +65,4 @@ credentials.json
 *.bak
 *.swp
 
-uploads/
-outputs/
-temp/
-
-!public/*.jpg
+debug/

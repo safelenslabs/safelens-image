@@ -9,8 +9,8 @@ This service provides REST API endpoints for:
 """
 
 import io
-import os
 import logging
+import uuid
 from typing import Optional
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
@@ -26,7 +26,13 @@ from src.models import (
     ReplacementMethod,
     BoundingBox,
 )
-from src.config import THUMBNAIL_MAX_WIDTH
+from src.config import (
+    THUMBNAIL_MAX_WIDTH,
+    S3_IMAGES_PREFIX,
+    get_settings,
+    setup_logging,
+    get_logger,
+)
 from pydantic import BaseModel
 from typing import List
 
@@ -34,8 +40,8 @@ from typing import List
 load_dotenv()
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+setup_logging(level=logging.INFO)
+logger = get_logger(__name__)
 
 
 # Global pipeline instance
@@ -48,34 +54,12 @@ async def lifespan(app: FastAPI):
     global pipeline
     logger.info("Initializing Privacy Pipeline with Gemini Vision API...")
 
-    # Create required directories
-    directories = ["uploads", "temp", "outputs", "public"]
-    for directory in directories:
-        os.makedirs(directory, exist_ok=True)
-        logger.info(f"Ensured directory exists: {directory}")
+    # Load settings
+    settings = get_settings()
 
-    # Get API key from environment
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        logger.warning("GEMINI_API_KEY not set in environment. Pipeline may fail.")
-
-    # Get default methods from environment (optional)
-    default_face_method = os.getenv("DEFAULT_FACE_METHOD", "blur").upper()
-    default_text_method = os.getenv("DEFAULT_TEXT_METHOD", "generate").upper()
-
-    # Map to enum
-    face_method = getattr(
-        ReplacementMethod, default_face_method, ReplacementMethod.BLUR
-    )
-    text_method = getattr(
-        ReplacementMethod, default_text_method, ReplacementMethod.GENERATE
-    )
-
-    # Initialize with Gemini detector
+    # Initialize pipeline with settings
     pipeline = PrivacyPipeline(
-        gemini_api_key=api_key,
-        default_face_method=face_method,
-        default_text_method=text_method,
+        settings=settings,
     )
 
     logger.info("Pipeline initialized successfully")
@@ -106,24 +90,10 @@ app.add_middleware(
 )
 
 
-@app.get("/")
-async def root():
-    """Root endpoint."""
-    return {
-        "service": "SafeLens Image Privacy Sanitization API",
-        "version": "0.1.0",
-        "status": "healthy",
-    }
-
-
 @app.get("/health")
 async def health():
     """Health check endpoint for Docker and load balancers."""
-    return {
-        "status": "healthy",
-        "service": "safelens-image",
-        "version": "0.1.0"
-    }
+    return {"status": "healthy", "service": "safelens-image", "version": "0.1.0"}
 
 
 # ===== API Endpoints =====
@@ -188,14 +158,10 @@ async def upload_image(
 
         logger.info(f"Uploading image: {file.filename}, size: {image.size}")
 
-        # Generate UUID and store image
-        import uuid
-
+        # Generate UUID
         image_id = str(uuid.uuid4())
-        pipeline._image_cache[image_id] = image.copy()
 
         # Generate thumbnail (low quality)
-        # Resize to max width from config while maintaining aspect ratio
         thumbnail = image.copy()
         if thumbnail.width > THUMBNAIL_MAX_WIDTH:
             ratio = THUMBNAIL_MAX_WIDTH / thumbnail.width
@@ -203,17 +169,16 @@ async def upload_image(
             thumbnail = thumbnail.resize(
                 (THUMBNAIL_MAX_WIDTH, new_height), Image.Resampling.LANCZOS
             )
-        pipeline._image_cache[f"{image_id}_low"] = thumbnail
 
-        # Save to disk (high quality)
-        image_path = pipeline.upload_dir / f"{image_id}.png"
-        image.save(image_path, "PNG")
+        # Save to S3
+        image_key = f"{S3_IMAGES_PREFIX}{image_id}.png"
+        pipeline.s3_storage.upload_image(image, image_key, format="PNG")
 
         # Save thumbnail
-        thumbnail_path = pipeline.upload_dir / f"{image_id}_low.png"
-        thumbnail.save(thumbnail_path, "PNG")
+        thumbnail_key = f"{S3_IMAGES_PREFIX}{image_id}_low.png"
+        pipeline.s3_storage.upload_image(thumbnail, thumbnail_key, format="PNG")
 
-        logger.info(f"Image uploaded with ID: {image_id}")
+        logger.info(f"Image uploaded to S3 with ID: {image_id}")
 
         return UploadResponse(image_id=image_id, message="Image uploaded successfully")
 
@@ -236,8 +201,10 @@ async def detect_from_uuid(image_id: str) -> DetectionResult:
         DetectionResult with all detections
     """
     try:
-        # Retrieve image from cache
-        image = pipeline._image_cache.get(image_id)
+        # Download image from S3
+        image_key = f"{S3_IMAGES_PREFIX}{image_id}.png"
+        image = pipeline.s3_storage.download_image(image_key)
+
         if image is None:
             raise HTTPException(status_code=404, detail=f"Image not found: {image_id}")
 
@@ -274,36 +241,23 @@ async def anonymize_with_bboxes(request: BboxAnonymizeRequest) -> AnonymizeRespo
         AnonymizeResponse with success status and both image UUIDs
     """
     try:
-        # Retrieve image from cache
-        image = pipeline._image_cache.get(request.image_id)
-        if image is None:
-            raise HTTPException(
-                status_code=404, detail=f"Image not found: {request.image_id}"
-            )
-
         logger.info(
             f"Anonymizing image {request.image_id} with {len(request.regions)} regions"
         )
 
-        # Prepare replacements with provided PII types
+        # Prepare replacements from regions
         replacements = []
         for region in request.regions:
-            # Use the provided pii_type (no cache lookup needed)
             label = region.pii_type
-
-            # Add replacement (bbox, method, custom_data, label)
             replacements.append((region.bbox, request.method, None, label))
 
-        # Apply anonymization
-        anonymized_image = pipeline.anonymizer.anonymize_image(image, replacements)
+        # Apply anonymization (downloads from S3 internally)
+        anonymized_image, output_key = pipeline.anonymize(
+            request.image_id, replacements
+        )
 
         # Generate UUID for anonymized image
-        import uuid
-
         anonymized_image_id = str(uuid.uuid4())
-
-        # Store anonymized image (high quality)
-        pipeline._image_cache[anonymized_image_id] = anonymized_image
 
         # Generate thumbnail (low quality)
         thumbnail = anonymized_image.copy()
@@ -313,15 +267,16 @@ async def anonymize_with_bboxes(request: BboxAnonymizeRequest) -> AnonymizeRespo
             thumbnail = thumbnail.resize(
                 (THUMBNAIL_MAX_WIDTH, new_height), Image.Resampling.LANCZOS
             )
-        pipeline._image_cache[f"{anonymized_image_id}_low"] = thumbnail
 
-        # Save to disk (high quality)
-        output_path = pipeline.output_dir / f"{anonymized_image_id}.png"
-        anonymized_image.save(output_path, "PNG")
+        # Save with new UUID
+        final_output_key = f"{S3_IMAGES_PREFIX}{anonymized_image_id}.png"
+        pipeline.s3_storage.upload_image(
+            anonymized_image, final_output_key, format="PNG"
+        )
 
         # Save thumbnail
-        thumbnail_path = pipeline.output_dir / f"{anonymized_image_id}_low.png"
-        thumbnail.save(thumbnail_path, "PNG")
+        thumbnail_key = f"{S3_IMAGES_PREFIX}{anonymized_image_id}_low.png"
+        pipeline.s3_storage.upload_image(thumbnail, thumbnail_key, format="PNG")
 
         logger.info(
             f"Anonymization complete: {request.image_id} -> {anonymized_image_id}"
@@ -345,16 +300,13 @@ async def anonymize_with_bboxes(request: BboxAnonymizeRequest) -> AnonymizeRespo
 
 
 @app.get("/download/{image_id}")
-async def download_image(
-    image_id: str, quality: str = "high", format: str = "png"
-) -> Response:
+async def download_image(image_id: str, quality: str = "high") -> Response:
     """
     4. Download image by UUID.
 
     Args:
         image_id: UUID of the image (original or anonymized)
         quality: Image quality - "high" (original) or "low" (thumbnail, 512px width) (default: "high")
-        format: Output format (png, jpg, webp)
 
     Returns:
         Image file
@@ -366,46 +318,27 @@ async def download_image(
                 status_code=400, detail="Invalid quality. Use 'high' or 'low'"
             )
 
-        # Get image from cache based on quality
+        # Determine image key based on quality
         if quality == "low":
-            image = pipeline._image_cache.get(f"{image_id}_low")
-            if image is None:
-                raise HTTPException(status_code=404, detail="Thumbnail not found")
+            image_key = f"{S3_IMAGES_PREFIX}{image_id}_low.png"
         else:
-            image = pipeline._image_cache.get(image_id)
-            if image is None:
-                raise HTTPException(status_code=404, detail="Image not found")
+            image_key = f"{S3_IMAGES_PREFIX}{image_id}.png"
 
-        # Validate format
-        format = format.lower()
-        if format not in ["png", "jpg", "jpeg", "webp"]:
-            raise HTTPException(status_code=400, detail="Invalid format")
+        # Download image
+        image = pipeline.s3_storage.download_image(image_key)
 
-        # Convert format
-        if format in ["jpg", "jpeg"]:
-            format_type = "JPEG"
-            media_type = "image/jpeg"
-            # Convert RGBA to RGB for JPEG
-            if image.mode == "RGBA":
-                image = image.convert("RGB")
-        elif format == "webp":
-            format_type = "WEBP"
-            media_type = "image/webp"
-        else:
-            format_type = "PNG"
-            media_type = "image/png"
+        if image is None:
+            raise HTTPException(status_code=404, detail="Image not found")
 
-        # Convert to bytes
+        # Convert to PNG bytes
         img_byte_arr = io.BytesIO()
-        image.save(img_byte_arr, format=format_type, quality=95)
+        image.save(img_byte_arr, format="PNG")
         img_byte_arr.seek(0)
 
         return StreamingResponse(
             img_byte_arr,
-            media_type=media_type,
-            headers={
-                "Content-Disposition": f"attachment; filename={image_id}.{format.lower()}"
-            },
+            media_type="image/png",
+            headers={"Content-Disposition": f"attachment; filename={image_id}.png"},
         )
 
     except HTTPException:

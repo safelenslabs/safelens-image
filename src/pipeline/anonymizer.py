@@ -5,13 +5,15 @@ Supports both polygon and bounding box regions.
 
 from typing import List, Optional, Tuple
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
-from .models import (
+from ..models import (
     BoundingBox,
     ReplacementMethod,
     PIIDetection,
     FaceDetection,
 )
-from .config import DEFAULT_FACE_METHOD, DEFAULT_TEXT_METHOD
+from ..config import DEFAULT_FACE_METHOD, DEFAULT_TEXT_METHOD, get_logger
+
+logger = get_logger(__name__)
 
 
 class Anonymizer:
@@ -85,13 +87,13 @@ class Anonymizer:
                     result = generated_image
                 else:
                     # Fallback to blur if generation fails
-                    print("[WARNING] Batch generation failed, falling back to blur")
+                    logger.warning("Batch generation failed, falling back to blur")
                     for region, _, _, _ in generate_items:
                         result = self._blur_region(result, region)
             else:
                 # Fallback to individual processing if batch not available
-                print(
-                    "[WARNING] Batch generation method not available, processing individually"
+                logger.warning(
+                    "Batch generation method not available, processing individually"
                 )
                 for region, method, custom_data, label in generate_items:
                     result = self._apply_replacement(
@@ -130,12 +132,10 @@ class Anonymizer:
                     # Generator now returns full image, not a patch
                     return generated_image
                 else:
-                    print(
-                        "[WARNING] Generation failed for region, falling back to blur"
-                    )
+                    logger.warning("Generation failed for region, falling back to blur")
                     return self._blur_region(image, region)
             else:
-                print("[WARNING] No generator available, falling back to blur")
+                logger.warning("No generator available, falling back to blur")
                 return self._blur_region(image, region)
         else:
             # Default to black box for unknown methods

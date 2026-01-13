@@ -1,8 +1,8 @@
 """
-Configuration constants for SafeLens.
+Application constants for SafeLens.
 """
 
-from .models import ReplacementMethod
+from ..models import ReplacementMethod
 
 # Model Settings
 DETECTION_MODEL = "gemini-3-flash-preview"  # Model for PII and face detection
@@ -21,4 +21,12 @@ DEFAULT_TEXT_METHOD = ReplacementMethod.GENERATE
 MASK_PADDING = 10  # Padding around masked regions in pixels
 
 # Image Quality Settings
-THUMBNAIL_MAX_WIDTH = 400  # Maximum width for low-quality thumbnails (height scales proportionally)
+THUMBNAIL_MAX_WIDTH = (
+    400  # Maximum width for low-quality thumbnails (height scales proportionally)
+)
+
+# S3 Folder Structure
+S3_IMAGES_PREFIX = "images/"  # Prefix for all images
+S3_DEBUG_PREFIX = "debug/"  # Prefix for temporary debug images
+S3_DEBUG_MASKED_PREFIX = "debug/masked/"  # Prefix for masked debug images
+S3_DEBUG_GEN_PREFIX = "debug/gen/"  # Prefix for generated debug images
