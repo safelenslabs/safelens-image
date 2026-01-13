@@ -57,9 +57,6 @@ logs/
 .env.*.local
 credentials.json
 
-# EasyOCR models cache
-~/.EasyOCR/
-
 # Temporary files
 *.tmp
 *.bak

@@ -141,7 +141,7 @@ async def upload_image(
     This endpoint:
     - Accepts an image file
     - Generates a unique UUID
-    - Stores the image in cache
+    - Stores the image in S3
     - Returns the UUID for later processing
 
     Returns:
