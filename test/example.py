@@ -13,7 +13,7 @@ import io
 load_dotenv()
 
 # Configuration
-IMAGE_PATH = "public/example1.jpg"  # Change this to use a different image
+IMAGE_PATH = "./figures/example1.jpg"  # Change this to use a different image
 API_BASE_URL = "http://localhost:8000"  # FastAPI server URL
 
 
