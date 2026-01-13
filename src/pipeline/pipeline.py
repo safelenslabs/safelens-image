@@ -3,7 +3,7 @@ Pipeline orchestrator that coordinates detection and anonymization.
 """
 
 import uuid
-from typing import Dict, Optional
+from typing import Optional
 from PIL import Image
 from ..config import (
     DEFAULT_FACE_METHOD,
@@ -12,16 +12,10 @@ from ..config import (
     MIN_TEXT_CONFIDENCE,
     DETECTION_MODEL,
     IMAGEN_MODEL,
-    S3_UPLOADS_PREFIX,
-    S3_OUTPUTS_PREFIX,
-    S3_ANONYMIZED_PREFIX,
+    S3_IMAGES_PREFIX,
 )
 from ..models import (
     DetectionResult,
-    PIIDetection,
-    FaceDetection,
-    AnonymizationRequest,
-    AnonymizationResult,
     ReplacementMethod,
 )
 from .gemini_detector import GeminiDetector
@@ -89,10 +83,6 @@ class PrivacyPipeline:
             default_text_method=default_text_method,
         )
 
-        # In-memory storage for images (for quick access)
-        self._image_cache: Dict[str, Image.Image] = {}
-        self._detection_cache: Dict[str, DetectionResult] = {}
-
     def detect(
         self, image: Image.Image, image_id: Optional[str] = None
     ) -> DetectionResult:
@@ -109,11 +99,8 @@ class PrivacyPipeline:
         if image_id is None:
             image_id = str(uuid.uuid4())
 
-        # Store image in memory for quick access
-        self._image_cache[image_id] = image.copy()
-
         # Save original image to S3
-        image_key = f"{S3_UPLOADS_PREFIX}{image_id}.png"
+        image_key = f"{S3_IMAGES_PREFIX}{image_id}.png"
         self.s3_storage.upload_image(image, image_key)
 
         # Run Gemini detection (unified PII + face detection)
@@ -128,102 +115,36 @@ class PrivacyPipeline:
             image_height=image.height,
         )
 
-        # Cache the detection result
-        self._detection_cache[image_id] = result
-
         return result
 
     def anonymize(
-        self, request: AnonymizationRequest
-    ) -> tuple[Image.Image, AnonymizationResult]:
+        self,
+        image_id: str,
+        replacements: list,
+    ) -> tuple[Image.Image, str]:
         """
-        Apply anonymization to selected detections.
+        Apply anonymization to image regions.
 
         Args:
-            request: AnonymizationRequest with selected replacements
+            image_id: ID of the image to anonymize
+            replacements: List of (bbox, method, custom_data, label) tuples
 
         Returns:
-            Tuple of (anonymized_image, result_info)
+            Tuple of (anonymized_image, output_key)
         """
-        # Retrieve cached image and detections
-        image = self._image_cache.get(request.image_id)
-        detections = self._detection_cache.get(request.image_id)
+        # Download image from S3
+        image_key = f"{S3_IMAGES_PREFIX}{image_id}.png"
+        image = self.s3_storage.download_image(image_key)
 
         if image is None:
-            raise ValueError(f"Image not found: {request.image_id}")
-
-        if detections is None:
-            raise ValueError(f"Detections not found for image: {request.image_id}")
-
-        # Build a map of detection_id -> detection
-        detection_map = {}
-        for pii in detections.pii_detections:
-            detection_map[pii.detection_id] = pii
-        for face in detections.face_detections:
-            detection_map[face.detection_id] = face
-
-        # Prepare replacements for anonymizer
-        replacements = []
-        applied_ids = []
-
-        for replacement_req in request.replacements:
-            detection = detection_map.get(replacement_req.detection_id)
-            if detection is None:
-                continue
-
-            bbox = detection.bbox
-            method = replacement_req.method
-            custom_data = replacement_req.custom_text
-
-            label = None
-            if isinstance(detection, PIIDetection):
-                label = detection.pii_type
-            elif isinstance(detection, FaceDetection):
-                label = "face"
-
-            replacements.append((bbox, method, custom_data, label))
-            applied_ids.append(replacement_req.detection_id)
+            raise ValueError(f"Image not found: {image_id}")
 
         # Apply anonymization
         anonymized_image = self.anonymizer.anonymize_image(image, replacements)
 
-        # Save anonymized image to S3
-        output_key = f"{S3_ANONYMIZED_PREFIX}{request.image_id}.png"
-        self.s3_storage.upload_image(anonymized_image, output_key)
-        message = f"Successfully anonymized {len(applied_ids)} regions. Saved to S3: {output_key}"
+        # Generate new UUID for anonymized image
+        anonymized_id = str(uuid.uuid4())
+        output_key = f"{S3_IMAGES_PREFIX}{anonymized_id}.png"
+        self.s3_storage.upload_image(anonymized_image, output_key, format="PNG")
 
-        # Create result
-        result = AnonymizationResult(
-            image_id=request.image_id,
-            applied_replacements=applied_ids,
-            output_format=request.output_format,
-            message=message,
-        )
-
-        return anonymized_image, result
-
-    def create_preview(
-        self, image_id: str, show_labels: bool = True
-    ) -> Optional[Image.Image]:
-        """
-        Create a preview image with all detections highlighted.
-
-        Args:
-            image_id: ID of the image
-            show_labels: Whether to show labels on bounding boxes
-
-        Returns:
-            Preview image or None if not found
-        """
-        image = self._image_cache.get(image_id)
-        detections = self._detection_cache.get(image_id)
-
-        if image is None or detections is None:
-            return None
-
-        return self.anonymizer.create_preview_with_boxes(
-            image,
-            detections.pii_detections,
-            detections.face_detections,
-            show_labels=show_labels,
-        )
+        return anonymized_image, output_key

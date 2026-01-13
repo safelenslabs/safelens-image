@@ -24,9 +24,7 @@ THUMBNAIL_MAX_WIDTH = (
 )
 
 # S3 Folder Structure
-S3_UPLOADS_PREFIX = "uploads/"  # Prefix for uploaded images
-S3_OUTPUTS_PREFIX = "outputs/"  # Prefix for anonymized images
+S3_IMAGES_PREFIX = "images/"  # Prefix for all images
 S3_DEBUG_PREFIX = "debug/"  # Prefix for temporary debug images
 S3_DEBUG_MASKED_PREFIX = "debug/masked/"  # Prefix for masked debug images
 S3_DEBUG_GEN_PREFIX = "debug/gen/"  # Prefix for generated debug images
-S3_ANONYMIZED_PREFIX = "outputs/anonymized/"  # Prefix for anonymized images
