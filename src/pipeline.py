@@ -13,6 +13,9 @@ from .config import (
     MIN_TEXT_CONFIDENCE,
     DETECTION_MODEL,
     IMAGEN_MODEL,
+    S3_UPLOADS_PREFIX,
+    S3_OUTPUTS_PREFIX,
+    S3_ANONYMIZED_PREFIX,
 )
 from .models import (
     DetectionResult,
@@ -25,6 +28,7 @@ from .models import (
 from .gemini_detector import GeminiDetector
 from .image_generator import ImageGenerator
 from .anonymizer import Anonymizer
+from .s3_storage import S3Storage
 
 
 class PrivacyPipeline:
@@ -47,8 +51,6 @@ class PrivacyPipeline:
         imagen_model: str = IMAGEN_MODEL,
         default_face_method: ReplacementMethod = DEFAULT_FACE_METHOD,
         default_text_method: ReplacementMethod = DEFAULT_TEXT_METHOD,
-        upload_dir: str = "uploads",
-        output_dir: str = "outputs",
     ):
         """
         Initialize the pipeline.
@@ -61,9 +63,11 @@ class PrivacyPipeline:
             imagen_model: Imagen model to use for image generation
             default_face_method: Default anonymization for faces (BLUR or GENERATE)
             default_text_method: Default anonymization for text PII (GENERATE or BLACK_BOX)
-            upload_dir: Directory to save uploaded images
-            output_dir: Directory to save anonymized images
         """
+        # Initialize S3 storage
+        self.s3_storage = S3Storage()
+        print(f"[Pipeline] S3 storage initialized")
+
         # Initialize Gemini detector
         self.detector = GeminiDetector(
             api_key=gemini_api_key,
@@ -72,9 +76,11 @@ class PrivacyPipeline:
             detection_model=detection_model,
         )
 
-        # Initialize Image Generator
+        # Initialize Image Generator with S3 storage
         self.generator = ImageGenerator(
-            api_key=gemini_api_key, imagen_model=imagen_model
+            api_key=gemini_api_key,
+            imagen_model=imagen_model,
+            s3_storage=self.s3_storage,
         )
 
         self.anonymizer = Anonymizer(
@@ -82,12 +88,6 @@ class PrivacyPipeline:
             default_face_method=default_face_method,
             default_text_method=default_text_method,
         )
-
-        # Setup storage directories
-        self.upload_dir = Path(upload_dir)
-        self.output_dir = Path(output_dir)
-        self.upload_dir.mkdir(exist_ok=True)
-        self.output_dir.mkdir(exist_ok=True)
 
         # In-memory storage for images (for quick access)
         self._image_cache: Dict[str, Image.Image] = {}
@@ -112,9 +112,9 @@ class PrivacyPipeline:
         # Store image in memory for quick access
         self._image_cache[image_id] = image.copy()
 
-        # Save original image to disk
-        image_path = self.upload_dir / f"{image_id}.png"
-        image.save(image_path, "PNG")
+        # Save original image to S3
+        image_key = f"{S3_UPLOADS_PREFIX}{image_id}.png"
+        self.s3_storage.upload_image(image, image_key)
 
         # Run Gemini detection (unified PII + face detection)
         pii_detections, face_detections = self.detector.detect(image)
@@ -187,16 +187,17 @@ class PrivacyPipeline:
         # Apply anonymization
         anonymized_image = self.anonymizer.anonymize_image(image, replacements)
 
-        # Save anonymized image to disk
-        output_path = self.output_dir / f"{request.image_id}_anonymized.png"
-        anonymized_image.save(output_path, "PNG")
+        # Save anonymized image to S3
+        output_key = f"{S3_ANONYMIZED_PREFIX}{request.image_id}.png"
+        self.s3_storage.upload_image(anonymized_image, output_key)
+        message = f"Successfully anonymized {len(applied_ids)} regions. Saved to S3: {output_key}"
 
         # Create result
         result = AnonymizationResult(
             image_id=request.image_id,
             applied_replacements=applied_ids,
             output_format=request.output_format,
-            message=f"Successfully anonymized {len(applied_ids)} regions. Saved to {output_path}",
+            message=message,
         )
 
         return anonymized_image, result

@@ -48,34 +48,14 @@ async def lifespan(app: FastAPI):
     global pipeline
     logger.info("Initializing Privacy Pipeline with Gemini Vision API...")
 
-    # Create required directories
-    directories = ["uploads", "temp", "outputs", "public"]
-    for directory in directories:
-        os.makedirs(directory, exist_ok=True)
-        logger.info(f"Ensured directory exists: {directory}")
-
     # Get API key from environment
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         logger.warning("GEMINI_API_KEY not set in environment. Pipeline may fail.")
 
-    # Get default methods from environment (optional)
-    default_face_method = os.getenv("DEFAULT_FACE_METHOD", "blur").upper()
-    default_text_method = os.getenv("DEFAULT_TEXT_METHOD", "generate").upper()
-
-    # Map to enum
-    face_method = getattr(
-        ReplacementMethod, default_face_method, ReplacementMethod.BLUR
-    )
-    text_method = getattr(
-        ReplacementMethod, default_text_method, ReplacementMethod.GENERATE
-    )
-
     # Initialize with Gemini detector
     pipeline = PrivacyPipeline(
         gemini_api_key=api_key,
-        default_face_method=face_method,
-        default_text_method=text_method,
     )
 
     logger.info("Pipeline initialized successfully")
@@ -119,11 +99,7 @@ async def root():
 @app.get("/health")
 async def health():
     """Health check endpoint for Docker and load balancers."""
-    return {
-        "status": "healthy",
-        "service": "safelens-image",
-        "version": "0.1.0"
-    }
+    return {"status": "healthy", "service": "safelens-image", "version": "0.1.0"}
 
 
 # ===== API Endpoints =====
@@ -205,15 +181,17 @@ async def upload_image(
             )
         pipeline._image_cache[f"{image_id}_low"] = thumbnail
 
-        # Save to disk (high quality)
-        image_path = pipeline.upload_dir / f"{image_id}.png"
-        image.save(image_path, "PNG")
+        # Save to S3
+        from src.config import S3_UPLOADS_PREFIX
+
+        image_key = f"{S3_UPLOADS_PREFIX}{image_id}.png"
+        pipeline.s3_storage.upload_image(image, image_key)
 
         # Save thumbnail
-        thumbnail_path = pipeline.upload_dir / f"{image_id}_low.png"
-        thumbnail.save(thumbnail_path, "PNG")
+        thumbnail_key = f"{S3_UPLOADS_PREFIX}{image_id}_low.png"
+        pipeline.s3_storage.upload_image(thumbnail, thumbnail_key)
 
-        logger.info(f"Image uploaded with ID: {image_id}")
+        logger.info(f"Image uploaded to S3 with ID: {image_id}")
 
         return UploadResponse(image_id=image_id, message="Image uploaded successfully")
 
@@ -315,13 +293,15 @@ async def anonymize_with_bboxes(request: BboxAnonymizeRequest) -> AnonymizeRespo
             )
         pipeline._image_cache[f"{anonymized_image_id}_low"] = thumbnail
 
-        # Save to disk (high quality)
-        output_path = pipeline.output_dir / f"{anonymized_image_id}.png"
-        anonymized_image.save(output_path, "PNG")
+        # Save to S3
+        from src.config import S3_OUTPUTS_PREFIX, S3_ANONYMIZED_PREFIX
+
+        output_key = f"{S3_ANONYMIZED_PREFIX}{anonymized_image_id}.png"
+        pipeline.s3_storage.upload_image(anonymized_image, output_key)
 
         # Save thumbnail
-        thumbnail_path = pipeline.output_dir / f"{anonymized_image_id}_low.png"
-        thumbnail.save(thumbnail_path, "PNG")
+        thumbnail_key = f"{S3_OUTPUTS_PREFIX}{anonymized_image_id}_low.png"
+        pipeline.s3_storage.upload_image(thumbnail, thumbnail_key)
 
         logger.info(
             f"Anonymization complete: {request.image_id} -> {anonymized_image_id}"

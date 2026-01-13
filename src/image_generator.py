@@ -9,7 +9,13 @@ from typing import Optional
 from PIL import Image, ImageDraw
 from google import genai
 from .models import BoundingBox, PIIType, PII_REPLACEMENT_VALUES
-from .config import IMAGEN_MODEL, MASK_PADDING
+from .config import (
+    IMAGEN_MODEL,
+    MASK_PADDING,
+    S3_DEBUG_MASKED_PREFIX,
+    S3_DEBUG_GEN_PREFIX,
+)
+from .s3_storage import S3Storage
 
 
 class ImageGenerator:
@@ -20,6 +26,7 @@ class ImageGenerator:
         api_key: str = None,
         imagen_model: str = IMAGEN_MODEL,
         mask_padding: int = MASK_PADDING,
+        s3_storage: S3Storage = None,
     ):
         """
         Initialize Image Generator.
@@ -28,6 +35,7 @@ class ImageGenerator:
             api_key: Google AI API key
             imagen_model: Model to use for image generation (default: gemini-2.5-flash-image)
             mask_padding: Padding (in pixels) to add around the bbox for better context (default: 10)
+            s3_storage: S3Storage instance for file uploads (optional)
         """
         api_key = api_key or os.getenv("GEMINI_API_KEY")
         if not api_key:
@@ -39,6 +47,7 @@ class ImageGenerator:
         self.client = genai.Client(api_key=api_key)
         self.imagen_model = imagen_model
         self.mask_padding = mask_padding
+        self.s3_storage = s3_storage
 
     def generate_replacement(
         self, image: Image.Image, region: BoundingBox, label: str = None
@@ -74,11 +83,12 @@ class ImageGenerator:
                 f"[DEBUG] Blacked area: ({mask_x1}, {mask_y1}) to ({mask_x2}, {mask_y2}) [padding: {self.mask_padding}px]"
             )
 
-            # Debug: Save masked image
+            # Debug: Save masked image to S3
             mask_uuid = uuid.uuid4()
-            masked_path = f"temp/debug_masked_{mask_uuid}.png"
-            masked_image.save(masked_path)
-            print(f"[DEBUG] Saved masked image to {masked_path}")
+            if self.s3_storage:
+                masked_key = f"{S3_DEBUG_MASKED_PREFIX}{mask_uuid}.png"
+                self.s3_storage.upload_image(masked_image, masked_key)
+                print(f"[DEBUG] Saved masked image to S3: {masked_key}")
 
             # 2. Call Gemini Generate Content
             try:
@@ -253,10 +263,14 @@ class ImageGenerator:
                         if part.inline_data:
                             gen_img = Image.open(io.BytesIO(part.inline_data.data))
 
-                            # Debug: Save generated image
-                            debug_path = f"temp/debug_gen_{uuid.uuid4()}.png"
-                            gen_img.save(debug_path)
-                            print(f"[DEBUG] Saved generated image to {debug_path}")
+                            # Debug: Save generated image to S3
+                            debug_uuid = uuid.uuid4()
+                            if self.s3_storage:
+                                debug_key = f"{S3_DEBUG_GEN_PREFIX}{debug_uuid}.png"
+                                self.s3_storage.upload_image(gen_img, debug_key)
+                                print(
+                                    f"[DEBUG] Saved generated image to S3: {debug_key}"
+                                )
                             print(
                                 f"[DEBUG] Original size: {image.size}, Generated size: {gen_img.size}"
                             )
@@ -338,11 +352,12 @@ class ImageGenerator:
                     f"[DEBUG]   Region {i + 1}: bbox={info['bbox']}, masked={info['masked_bbox']}, label={info['label']}"
                 )
 
-            # Debug: Save masked image
+            # Debug: Save masked image to S3
             mask_uuid = uuid.uuid4()
-            masked_path = f"temp/debug_batch_masked_{mask_uuid}.png"
-            masked_image.save(masked_path)
-            print(f"[DEBUG] Saved batch masked image to {masked_path}")
+            if self.s3_storage:
+                masked_key = f"{S3_DEBUG_MASKED_PREFIX}batch_{mask_uuid}.png"
+                self.s3_storage.upload_image(masked_image, masked_key)
+                print(f"[DEBUG] Saved batch masked image to S3: {masked_key}")
 
             # Build prompt with all region information
             try:
@@ -537,12 +552,16 @@ class ImageGenerator:
                         if part.inline_data:
                             gen_img = Image.open(io.BytesIO(part.inline_data.data))
 
-                            # Debug: Save generated image
-                            debug_path = f"temp/debug_batch_gen_{uuid.uuid4()}.png"
-                            gen_img.save(debug_path)
-                            print(
-                                f"[DEBUG] Saved batch generated image to {debug_path}"
-                            )
+                            # Debug: Save generated image to S3
+                            debug_uuid = uuid.uuid4()
+                            if self.s3_storage:
+                                debug_key = (
+                                    f"{S3_DEBUG_GEN_PREFIX}batch_{debug_uuid}.png"
+                                )
+                                self.s3_storage.upload_image(gen_img, debug_key)
+                                print(
+                                    f"[DEBUG] Saved batch generated image to S3: {debug_key}"
+                                )
                             print(
                                 f"[DEBUG] Original size: {image.size}, Generated size: {gen_img.size}"
                             )

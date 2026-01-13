@@ -2,6 +2,7 @@
 Configuration constants for SafeLens.
 """
 
+import os
 from .models import ReplacementMethod
 
 # Model Settings
@@ -21,4 +22,18 @@ DEFAULT_TEXT_METHOD = ReplacementMethod.GENERATE
 MASK_PADDING = 10  # Padding around masked regions in pixels
 
 # Image Quality Settings
-THUMBNAIL_MAX_WIDTH = 400  # Maximum width for low-quality thumbnails (height scales proportionally)
+THUMBNAIL_MAX_WIDTH = (
+    400  # Maximum width for low-quality thumbnails (height scales proportionally)
+)
+
+# S3 Storage Settings
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")  # S3 bucket name
+S3_REGION_NAME = os.getenv("S3_REGION_NAME", "us-east-1")  # S3 region
+
+# S3 Folder Structure
+S3_UPLOADS_PREFIX = "uploads/"  # Prefix for uploaded images
+S3_OUTPUTS_PREFIX = "outputs/"  # Prefix for anonymized images
+S3_DEBUG_PREFIX = "debug/"  # Prefix for temporary debug images
+S3_DEBUG_MASKED_PREFIX = "debug/masked/"  # Prefix for masked debug images
+S3_DEBUG_GEN_PREFIX = "debug/gen/"  # Prefix for generated debug images
+S3_ANONYMIZED_PREFIX = "outputs/anonymized/"  # Prefix for anonymized images
