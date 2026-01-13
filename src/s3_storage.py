@@ -3,42 +3,27 @@ S3 storage utility for image upload/download.
 """
 
 import io
-import os
 from typing import Optional
 from PIL import Image
 import boto3
 from botocore.exceptions import ClientError
+from .settings import Settings
 
 
 class S3Storage:
     """S3 storage handler for images."""
 
-    def __init__(
-        self,
-        bucket_name: str = None,
-        region_name: str = None,
-        aws_access_key_id: str = None,
-        aws_secret_access_key: str = None,
-    ):
+    def __init__(self, settings: Settings):
         """
         Initialize S3 storage client.
 
         Args:
-            bucket_name: S3 bucket name (defaults to S3_BUCKET_NAME env var)
-            region_name: AWS region (defaults to S3_REGION_NAME env var or 'us-east-1')
-            aws_access_key_id: AWS access key (defaults to AWS_ACCESS_KEY_ID env var)
-            aws_secret_access_key: AWS secret key (defaults to AWS_SECRET_ACCESS_KEY env var)
+            settings: Settings instance with S3 configuration
         """
-        self.bucket_name = bucket_name or os.getenv("S3_BUCKET_NAME")
-        if not self.bucket_name:
-            raise ValueError(
-                "S3 bucket name required. Set S3_BUCKET_NAME environment variable "
-                "or pass bucket_name parameter."
-            )
-
-        region = region_name or os.getenv("S3_REGION_NAME", "us-east-1")
-        access_key = aws_access_key_id or os.getenv("AWS_ACCESS_KEY_ID")
-        secret_key = aws_secret_access_key or os.getenv("AWS_SECRET_ACCESS_KEY")
+        self.bucket_name = settings.s3_bucket_name
+        region = settings.s3_region_name
+        access_key = settings.aws_access_key_id
+        secret_key = settings.aws_secret_access_key
 
         # Initialize S3 client
         session_kwargs = {"region_name": region}

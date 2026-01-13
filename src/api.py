@@ -27,6 +27,7 @@ from src.models import (
     BoundingBox,
 )
 from src.config import THUMBNAIL_MAX_WIDTH
+from src.settings import get_settings
 from pydantic import BaseModel
 from typing import List
 
@@ -48,14 +49,12 @@ async def lifespan(app: FastAPI):
     global pipeline
     logger.info("Initializing Privacy Pipeline with Gemini Vision API...")
 
-    # Get API key from environment
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        logger.warning("GEMINI_API_KEY not set in environment. Pipeline may fail.")
+    # Load settings
+    settings = get_settings()
 
-    # Initialize with Gemini detector
+    # Initialize pipeline with settings
     pipeline = PrivacyPipeline(
-        gemini_api_key=api_key,
+        settings=settings,
     )
 
     logger.info("Pipeline initialized successfully")

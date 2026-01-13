@@ -3,7 +3,6 @@ Pipeline orchestrator that coordinates detection and anonymization.
 """
 
 import uuid
-from pathlib import Path
 from typing import Dict, Optional
 from PIL import Image
 from .config import (
@@ -29,6 +28,7 @@ from .gemini_detector import GeminiDetector
 from .image_generator import ImageGenerator
 from .anonymizer import Anonymizer
 from .s3_storage import S3Storage
+from .settings import Settings
 
 
 class PrivacyPipeline:
@@ -44,7 +44,7 @@ class PrivacyPipeline:
 
     def __init__(
         self,
-        gemini_api_key: Optional[str] = None,
+        settings: Settings,
         min_face_confidence: float = MIN_FACE_CONFIDENCE,
         min_text_confidence: float = MIN_TEXT_CONFIDENCE,
         detection_model: str = DETECTION_MODEL,
@@ -56,7 +56,7 @@ class PrivacyPipeline:
         Initialize the pipeline.
 
         Args:
-            gemini_api_key: Google Gemini API key (if None, will read from env)
+            settings: Settings instance with API keys and S3 configuration
             min_face_confidence: Minimum confidence for face detections
             min_text_confidence: Minimum confidence for text PII detections
             detection_model: Gemini model to use for detection
@@ -65,12 +65,12 @@ class PrivacyPipeline:
             default_text_method: Default anonymization for text PII (GENERATE or BLACK_BOX)
         """
         # Initialize S3 storage
-        self.s3_storage = S3Storage()
+        self.s3_storage = S3Storage(settings)
         print(f"[Pipeline] S3 storage initialized")
 
         # Initialize Gemini detector
         self.detector = GeminiDetector(
-            api_key=gemini_api_key,
+            api_key=settings.gemini_api_key,
             min_face_confidence=min_face_confidence,
             min_text_confidence=min_text_confidence,
             detection_model=detection_model,
@@ -78,7 +78,7 @@ class PrivacyPipeline:
 
         # Initialize Image Generator with S3 storage
         self.generator = ImageGenerator(
-            api_key=gemini_api_key,
+            api_key=settings.gemini_api_key,
             imagen_model=imagen_model,
             s3_storage=self.s3_storage,
         )

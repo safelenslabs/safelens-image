@@ -1,8 +1,5 @@
-"""
-Configuration constants for SafeLens.
-"""
+"""Configuration constants for SafeLens."""
 
-import os
 from .models import ReplacementMethod
 
 # Model Settings
@@ -25,10 +22,6 @@ MASK_PADDING = 10  # Padding around masked regions in pixels
 THUMBNAIL_MAX_WIDTH = (
     400  # Maximum width for low-quality thumbnails (height scales proportionally)
 )
-
-# S3 Storage Settings
-S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")  # S3 bucket name
-S3_REGION_NAME = os.getenv("S3_REGION_NAME", "us-east-1")  # S3 region
 
 # S3 Folder Structure
 S3_UPLOADS_PREFIX = "uploads/"  # Prefix for uploaded images
