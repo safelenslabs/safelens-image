@@ -11,6 +11,14 @@ from PIL import Image
 import io
 import base64
 from google import genai
+from ..config import (
+    DETECTION_MODEL,
+    MIN_FACE_CONFIDENCE,
+    MIN_TEXT_CONFIDENCE,
+    get_logger,
+)
+
+logger = get_logger(__name__)
 
 from ..models import (
     PIIDetection,
@@ -19,7 +27,6 @@ from ..models import (
     PIIType,
     DetectionType,
 )
-from ..config import DETECTION_MODEL, MIN_FACE_CONFIDENCE, MIN_TEXT_CONFIDENCE
 
 
 # System prompt for Gemini detection
@@ -146,13 +153,13 @@ class GeminiDetector:
 
         # Get original image dimensions
         orig_width, orig_height = image.size
-        print(f"\n[INFO] Processing image: {orig_width}x{orig_height} pixels")
+        logger.info(f"Processing image: {orig_width}x{orig_height} pixels")
 
         # Skip resizing to ensure bbox coordinates map directly to original image
         scale_factor = 1.0
         processing_image = image
         proc_width, proc_height = orig_width, orig_height
-        print(f"[INFO] Using original image size: {proc_width}x{proc_height}")
+        logger.info(f"Using original image size: {proc_width}x{proc_height}")
 
         # Format prompt with processing image dimensions
         detection_prompt = DETECTION_PROMPT_TEMPLATE.format(
@@ -196,8 +203,8 @@ class GeminiDetector:
                 raise ValueError("Response is not a list")
 
         except (json.JSONDecodeError, ValueError) as e:
-            print(f"Failed to parse Gemini response: {e}")
-            print(f"Response text: {response.text}")
+            logger.error(f"Failed to parse Gemini response: {e}")
+            logger.error(f"Response text: {response.text}")
             return [], []
 
         # Convert to our models
@@ -212,25 +219,25 @@ class GeminiDetector:
             confidence = det.get("confidence", 0.0)
 
             # Debug: Print original coordinates from Gemini
-            print(f"\n[DEBUG] Gemini returned {detection_type} ({label}):")
-            print(f"  Original bbox: {bbox_coords}")
-            print(f"  Processing size: {proc_width} x {proc_height}")
+            logger.debug(f"Gemini returned {detection_type} ({label}):")
+            logger.debug(f"  Original bbox: {bbox_coords}")
+            logger.debug(f"  Processing size: {proc_width} x {proc_height}")
 
             # Filter by confidence threshold (different for faces vs text)
             if detection_type == "face" and confidence < self.min_face_confidence:
-                print(
-                    f"  [INFO] Face confidence {confidence} below threshold {self.min_face_confidence}, skipping"
+                logger.info(
+                    f"Face confidence {confidence} below threshold {self.min_face_confidence}, skipping"
                 )
                 continue
             elif detection_type == "text_pii" and confidence < self.min_text_confidence:
-                print(
-                    f"  [INFO] Text PII confidence {confidence} below threshold {self.min_text_confidence}, skipping"
+                logger.info(
+                    f"Text PII confidence {confidence} below threshold {self.min_text_confidence}, skipping"
                 )
                 continue
 
             # Parse bbox [ymin, xmin, ymax, xmax]
             if len(bbox_coords) != 4:
-                print("  [WARNING] Invalid bbox format, skipping")
+                logger.warning("Invalid bbox format, skipping")
                 continue
 
             y_min, x_min, y_max, x_max = bbox_coords
@@ -239,9 +246,7 @@ class GeminiDetector:
             if all(0 <= c <= 1000 for c in bbox_coords) and any(
                 c > 1 for c in bbox_coords
             ):
-                print(
-                    "  [INFO] Detected 0-1000 normalized coords, converting to pixels"
-                )
+                logger.info("Detected 0-1000 normalized coords, converting to pixels")
                 # Convert 0-1000 -> processing_image pixels
                 x_min_proc = (x_min / 1000.0) * proc_width
                 x_max_proc = (x_max / 1000.0) * proc_width
@@ -256,7 +261,7 @@ class GeminiDetector:
 
             # Handle 0-1 normalized coordinates (fallback)
             elif all(0 <= c <= 1.0 for c in bbox_coords):
-                print("  [INFO] Detected 0-1 normalized coords, converting to pixels")
+                logger.info("Detected 0-1 normalized coords, converting to pixels")
                 x_min = int(x_min * orig_width)
                 x_max = int(x_max * orig_width)
                 y_min = int(y_min * orig_height)
@@ -264,13 +269,13 @@ class GeminiDetector:
 
             # Handle absolute pixel coordinates (fallback)
             else:
-                print("  [INFO] Detected absolute pixel coords")
+                logger.info("Detected absolute pixel coords")
                 # If we resized, we need to scale back?
                 # But if model used proc_width/height, we need to know.
                 # Assuming model followed instructions and used 0-1000, this block shouldn't be hit often.
                 # If it returns pixels relative to resized image:
                 if scale_factor != 1.0 and x_max <= proc_width and y_max <= proc_height:
-                    print("  [INFO] Scaling up from processing size")
+                    logger.info("Scaling up from processing size")
                     x_min = int(x_min / scale_factor)
                     x_max = int(x_max / scale_factor)
                     y_min = int(y_min / scale_factor)
@@ -278,8 +283,8 @@ class GeminiDetector:
 
             # Validate bbox
             if x_min >= x_max or y_min >= y_max:
-                print(
-                    "  [WARNING] Invalid bbox: x_min >= x_max or y_min >= y_max, skipping"
+                logger.warning(
+                    "Invalid bbox: x_min >= x_max or y_min >= y_max, skipping"
                 )
                 continue
 
@@ -291,11 +296,11 @@ class GeminiDetector:
 
             # Ensure bbox still valid after clamping
             if x_min >= x_max or y_min >= y_max:
-                print("  [WARNING] bbox became invalid after clamping, skipping")
+                logger.warning("bbox became invalid after clamping, skipping")
                 continue
 
-            print(f"  Final pixel bbox: [{x_min}, {y_min}, {x_max}, {y_max}]")
-            print(f"  Bbox size: {x_max - x_min} x {y_max - y_min} pixels")
+            logger.debug(f"Final pixel bbox: [{x_min}, {y_min}, {x_max}, {y_max}]")
+            logger.debug(f"Bbox size: {x_max - x_min} x {y_max - y_min} pixels")
 
             # Create BoundingBox object
             bbox = BoundingBox(

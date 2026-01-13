@@ -1,6 +1,8 @@
-"""Configuration constants for SafeLens."""
+"""
+Application constants for SafeLens.
+"""
 
-from .models import ReplacementMethod
+from ..models import ReplacementMethod
 
 # Model Settings
 DETECTION_MODEL = "gemini-3-flash-preview"  # Model for PII and face detection

@@ -14,8 +14,11 @@ from ..config import (
     MASK_PADDING,
     S3_DEBUG_MASKED_PREFIX,
     S3_DEBUG_GEN_PREFIX,
+    get_logger,
 )
 from ..s3_storage import S3Storage
+
+logger = get_logger(__name__)
 
 
 class ImageGenerator:
@@ -78,9 +81,9 @@ class ImageGenerator:
             # Draw black rectangle on the area to be replaced
             draw.rectangle([mask_x1, mask_y1, mask_x2, mask_y2], fill="black")
 
-            print(f"[DEBUG] Original bbox: ({x1}, {y1}) to ({x2}, {y2})")
-            print(
-                f"[DEBUG] Blacked area: ({mask_x1}, {mask_y1}) to ({mask_x2}, {mask_y2}) [padding: {self.mask_padding}px]"
+            logger.debug(f"Original bbox: ({x1}, {y1}) to ({x2}, {y2})")
+            logger.debug(
+                f"Blacked area: ({mask_x1}, {mask_y1}) to ({mask_x2}, {mask_y2}) [padding: {self.mask_padding}px]"
             )
 
             # Debug: Save masked image to S3
@@ -88,7 +91,7 @@ class ImageGenerator:
             if self.s3_storage:
                 masked_key = f"{S3_DEBUG_MASKED_PREFIX}{mask_uuid}.png"
                 self.s3_storage.upload_image(masked_image, masked_key)
-                print(f"[DEBUG] Saved masked image to S3: {masked_key}")
+                logger.debug(f"Saved masked image to S3: {masked_key}")
 
             # 2. Call Gemini Generate Content
             try:
@@ -141,9 +144,9 @@ class ImageGenerator:
                             if os.path.exists(ref_path):
                                 reference_image = Image.open(ref_path)
                                 prompt_text += "3. A REFERENCE image showing the desired QR code or barcode design (third image)\n\n"
-                                print(f"[DEBUG] Loaded reference image from {ref_path}")
+                                logger.debug(f"Loaded reference image from {ref_path}")
                         except Exception as e:
-                            print(f"[WARNING] Failed to load reference image: {e}")
+                            logger.warning(f"Failed to load reference image: {e}")
 
                 if not reference_image:
                     prompt_text += "\n"
@@ -238,7 +241,7 @@ class ImageGenerator:
                         else:
                             prompt_text += f"\n\nIMPORTANT: The black area contained {label_str}. Fill it with natural background that matches the context."
 
-                print(f"[DEBUG] Prompt: {prompt_text}")
+                logger.debug(f"Prompt: {prompt_text}")
 
                 # Prepare contents list
                 contents = [
@@ -250,7 +253,7 @@ class ImageGenerator:
                 # Add reference image if available (for QR/barcode)
                 if reference_image:
                     contents.append(reference_image)  # Third: Reference image
-                    print(f"[DEBUG] Including reference image in API call")
+                    logger.debug(f"Including reference image in API call")
 
                 response = self.client.models.generate_content(
                     model=self.imagen_model,
@@ -268,17 +271,17 @@ class ImageGenerator:
                             if self.s3_storage:
                                 debug_key = f"{S3_DEBUG_GEN_PREFIX}{debug_uuid}.png"
                                 self.s3_storage.upload_image(gen_img, debug_key)
-                                print(
-                                    f"[DEBUG] Saved generated image to S3: {debug_key}"
+                                logger.debug(
+                                    f"Saved generated image to S3: {debug_key}"
                                 )
-                            print(
-                                f"[DEBUG] Original size: {image.size}, Generated size: {gen_img.size}"
+                            logger.debug(
+                                f"Original size: {image.size}, Generated size: {gen_img.size}"
                             )
 
                             # Check if generated image size matches original
                             if gen_img.size != image.size:
-                                print(
-                                    f"[WARNING] Size mismatch! Resizing {gen_img.size} -> {image.size}"
+                                logger.warning(
+                                    f"Size mismatch! Resizing {gen_img.size} -> {image.size}"
                                 )
                                 gen_img = gen_img.resize(
                                     image.size, Image.Resampling.LANCZOS
@@ -287,15 +290,15 @@ class ImageGenerator:
                             # Return the full generated image (no cropping needed)
                             return gen_img
 
-                print("[WARNING] No image part found in response.")
+                logger.warning("No image part found in response.")
                 return None
 
             except Exception as e:
-                print(f"[WARNING] Gemini generation failed: {e}")
+                logger.warning(f"Gemini generation failed: {e}")
                 return None
 
         except Exception as e:
-            print(f"[ERROR] Generation failed: {e}")
+            logger.error(f"Generation failed: {e}")
             return None
 
     def generate_replacements_batch(
@@ -346,10 +349,10 @@ class ImageGenerator:
                     }
                 )
 
-            print(f"[DEBUG] Batch processing {len(regions)} regions in single API call")
+            logger.debug(f"Batch processing {len(regions)} regions in single API call")
             for i, info in enumerate(region_infos):
-                print(
-                    f"[DEBUG]   Region {i + 1}: bbox={info['bbox']}, masked={info['masked_bbox']}, label={info['label']}"
+                logger.debug(
+                    f"  Region {i + 1}: bbox={info['bbox']}, masked={info['masked_bbox']}, label={info['label']}"
                 )
 
             # Debug: Save masked image to S3
@@ -357,7 +360,7 @@ class ImageGenerator:
             if self.s3_storage:
                 masked_key = f"{S3_DEBUG_MASKED_PREFIX}batch_{mask_uuid}.png"
                 self.s3_storage.upload_image(masked_image, masked_key)
-                print(f"[DEBUG] Saved batch masked image to S3: {masked_key}")
+                logger.debug(f"Saved batch masked image to S3: {masked_key}")
 
             # Build prompt with all region information
             try:
@@ -410,12 +413,12 @@ class ImageGenerator:
                                     reference_image_info.append(
                                         (i, len(reference_images))
                                     )
-                                    print(
-                                        f"[DEBUG] Loaded reference image from {ref_path} for region {i + 1}"
+                                    logger.debug(
+                                        f"Loaded reference image from {ref_path} for region {i + 1}"
                                     )
                             except Exception as e:
-                                print(
-                                    f"[WARNING] Failed to load reference image for region {i + 1}: {e}"
+                                logger.warning(
+                                    f"Failed to load reference image for region {i + 1}: {e}"
                                 )
 
                 prompt_text = (
@@ -525,7 +528,7 @@ class ImageGenerator:
 
                 prompt_text += "\nFill all areas maintaining consistent style and natural appearance."
 
-                print(f"[DEBUG] Batch prompt: {prompt_text}")
+                logger.debug(f"Batch prompt: {prompt_text}")
 
                 # Prepare contents list
                 contents = [
@@ -537,8 +540,8 @@ class ImageGenerator:
                 # Add reference images if available
                 if reference_images:
                     contents.extend(reference_images)
-                    print(
-                        f"[DEBUG] Including {len(reference_images)} reference image(s) in batch API call"
+                    logger.debug(
+                        f"Including {len(reference_images)} reference image(s) in batch API call"
                     )
 
                 response = self.client.models.generate_content(
@@ -559,17 +562,17 @@ class ImageGenerator:
                                     f"{S3_DEBUG_GEN_PREFIX}batch_{debug_uuid}.png"
                                 )
                                 self.s3_storage.upload_image(gen_img, debug_key)
-                                print(
-                                    f"[DEBUG] Saved batch generated image to S3: {debug_key}"
+                                logger.debug(
+                                    f"Saved batch generated image to S3: {debug_key}"
                                 )
-                            print(
-                                f"[DEBUG] Original size: {image.size}, Generated size: {gen_img.size}"
+                            logger.debug(
+                                f"Original size: {image.size}, Generated size: {gen_img.size}"
                             )
 
                             # Resize if needed
                             if gen_img.size != image.size:
-                                print(
-                                    f"[WARNING] Size mismatch! Resizing {gen_img.size} -> {image.size}"
+                                logger.warning(
+                                    f"Size mismatch! Resizing {gen_img.size} -> {image.size}"
                                 )
                                 gen_img = gen_img.resize(
                                     image.size, Image.Resampling.LANCZOS
@@ -577,13 +580,13 @@ class ImageGenerator:
 
                             return gen_img
 
-                print("[WARNING] No image part found in batch response.")
+                logger.warning("No image part found in batch response.")
                 return None
 
             except Exception as e:
-                print(f"[WARNING] Batch generation failed: {e}")
+                logger.warning(f"Batch generation failed: {e}")
                 return None
 
         except Exception as e:
-            print(f"[ERROR] Batch generation failed: {e}")
+            logger.error(f"Batch generation failed: {e}")
             return None

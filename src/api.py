@@ -26,8 +26,13 @@ from src.models import (
     ReplacementMethod,
     BoundingBox,
 )
-from src.config import THUMBNAIL_MAX_WIDTH, S3_IMAGES_PREFIX
-from src.settings import get_settings
+from src.config import (
+    THUMBNAIL_MAX_WIDTH,
+    S3_IMAGES_PREFIX,
+    get_settings,
+    setup_logging,
+    get_logger,
+)
 from pydantic import BaseModel
 from typing import List
 
@@ -35,8 +40,8 @@ from typing import List
 load_dotenv()
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+setup_logging(level=logging.INFO)
+logger = get_logger(__name__)
 
 
 # Global pipeline instance
@@ -83,16 +88,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.get("/")
-async def root():
-    """Root endpoint."""
-    return {
-        "service": "SafeLens Image Privacy Sanitization API",
-        "version": "0.1.0",
-        "status": "healthy",
-    }
 
 
 @app.get("/health")
@@ -275,7 +270,9 @@ async def anonymize_with_bboxes(request: BboxAnonymizeRequest) -> AnonymizeRespo
 
         # Save with new UUID
         final_output_key = f"{S3_IMAGES_PREFIX}{anonymized_image_id}.png"
-        pipeline.s3_storage.upload_image(anonymized_image, final_output_key, format="PNG")
+        pipeline.s3_storage.upload_image(
+            anonymized_image, final_output_key, format="PNG"
+        )
 
         # Save thumbnail
         thumbnail_key = f"{S3_IMAGES_PREFIX}{anonymized_image_id}_low.png"
@@ -303,9 +300,7 @@ async def anonymize_with_bboxes(request: BboxAnonymizeRequest) -> AnonymizeRespo
 
 
 @app.get("/download/{image_id}")
-async def download_image(
-    image_id: str, quality: str = "high"
-) -> Response:
+async def download_image(image_id: str, quality: str = "high") -> Response:
     """
     4. Download image by UUID.
 
@@ -343,9 +338,7 @@ async def download_image(
         return StreamingResponse(
             img_byte_arr,
             media_type="image/png",
-            headers={
-                "Content-Disposition": f"attachment; filename={image_id}.png"
-            },
+            headers={"Content-Disposition": f"attachment; filename={image_id}.png"},
         )
 
     except HTTPException:

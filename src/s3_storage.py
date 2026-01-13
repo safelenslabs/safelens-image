@@ -7,7 +7,9 @@ from typing import Optional
 from PIL import Image
 import boto3
 from botocore.exceptions import ClientError
-from .settings import Settings
+from .config import Settings, get_logger
+
+logger = get_logger(__name__)
 
 
 class S3Storage:
@@ -35,7 +37,7 @@ class S3Storage:
             session_kwargs["aws_secret_access_key"] = secret_key
 
         self.s3_client = boto3.client("s3", **session_kwargs)
-        print(f"[S3] Initialized S3 client for bucket: {self.bucket_name}")
+        logger.info(f"Initialized S3 client for bucket: {self.bucket_name}")
 
     def upload_image(
         self,
@@ -84,11 +86,11 @@ class S3Storage:
                 ContentType=content_type,
             )
 
-            print(f"[S3] Uploaded image to s3://{self.bucket_name}/{key}")
+            logger.info(f"Uploaded image to s3://{self.bucket_name}/{key}")
             return f"s3://{self.bucket_name}/{key}"
 
         except ClientError as e:
-            print(f"[S3] Error uploading image: {e}")
+            logger.error(f"Error uploading image: {e}")
             raise
 
     def download_image(self, key: str) -> Optional[Image.Image]:
@@ -108,14 +110,14 @@ class S3Storage:
 
             # Convert to PIL Image
             image = Image.open(io.BytesIO(img_data))
-            print(f"[S3] Downloaded image from s3://{self.bucket_name}/{key}")
+            logger.info(f"Downloaded image from s3://{self.bucket_name}/{key}")
             return image
 
         except ClientError as e:
             if e.response["Error"]["Code"] == "NoSuchKey":
-                print(f"[S3] Image not found: {key}")
+                logger.warning(f"Image not found: {key}")
                 return None
-            print(f"[S3] Error downloading image: {e}")
+            logger.error(f"Error downloading image: {e}")
             raise
 
     def delete_image(self, key: str) -> bool:
@@ -130,11 +132,11 @@ class S3Storage:
         """
         try:
             self.s3_client.delete_object(Bucket=self.bucket_name, Key=key)
-            print(f"[S3] Deleted image: s3://{self.bucket_name}/{key}")
+            logger.info(f"Deleted image: s3://{self.bucket_name}/{key}")
             return True
 
         except ClientError as e:
-            print(f"[S3] Error deleting image: {e}")
+            logger.error(f"Error deleting image: {e}")
             return False
 
     def get_presigned_url(self, key: str, expiration: int = 3600) -> Optional[str]:
@@ -157,7 +159,7 @@ class S3Storage:
             return url
 
         except ClientError as e:
-            print(f"[S3] Error generating presigned URL: {e}")
+            logger.error(f"Error generating presigned URL: {e}")
             return None
 
     def list_images(self, prefix: str = "") -> list[str]:
@@ -182,5 +184,5 @@ class S3Storage:
             return keys
 
         except ClientError as e:
-            print(f"[S3] Error listing images: {e}")
+            logger.error(f"Error listing images: {e}")
             return []

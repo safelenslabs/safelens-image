@@ -13,6 +13,8 @@ from ..config import (
     DETECTION_MODEL,
     IMAGEN_MODEL,
     S3_IMAGES_PREFIX,
+    Settings,
+    get_logger,
 )
 from ..models import (
     DetectionResult,
@@ -22,7 +24,8 @@ from .gemini_detector import GeminiDetector
 from .image_generator import ImageGenerator
 from .anonymizer import Anonymizer
 from ..s3_storage import S3Storage
-from ..settings import Settings
+
+logger = get_logger(__name__)
 
 
 class PrivacyPipeline:
@@ -60,7 +63,6 @@ class PrivacyPipeline:
         """
         # Initialize S3 storage
         self.s3_storage = S3Storage(settings)
-        print(f"[Pipeline] S3 storage initialized")
 
         # Initialize Gemini detector
         self.detector = GeminiDetector(
