@@ -34,16 +34,6 @@ AWS_ACCESS_KEY_ID=your_aws_access_key_id
 AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
 ```
 
-### Storage
-
-SafeLens Image uses Amazon S3 for image storage:
-- All images are uploaded to the specified S3 bucket
-- Images are organized with prefixes:
-  - `uploads/` - Original uploaded images
-  - `outputs/` - Anonymized images
-  - `temp/` - Temporary debug images
-- Requires AWS credentials with S3 read/write permissions
-
 ### 3. Run Server
 
 ```bash
