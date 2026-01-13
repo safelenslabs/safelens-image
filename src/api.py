@@ -10,6 +10,7 @@ This service provides REST API endpoints for:
 
 import io
 import logging
+import uuid
 from typing import Optional
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
@@ -25,7 +26,7 @@ from src.models import (
     ReplacementMethod,
     BoundingBox,
 )
-from src.config import THUMBNAIL_MAX_WIDTH
+from src.config import THUMBNAIL_MAX_WIDTH, S3_IMAGES_PREFIX
 from src.settings import get_settings
 from pydantic import BaseModel
 from typing import List
@@ -163,8 +164,6 @@ async def upload_image(
         logger.info(f"Uploading image: {file.filename}, size: {image.size}")
 
         # Generate UUID
-        import uuid
-
         image_id = str(uuid.uuid4())
 
         # Generate thumbnail (low quality)
@@ -177,8 +176,6 @@ async def upload_image(
             )
 
         # Save to S3
-        from src.config import S3_IMAGES_PREFIX
-
         image_key = f"{S3_IMAGES_PREFIX}{image_id}.png"
         pipeline.s3_storage.upload_image(image, image_key, format="PNG")
 
@@ -210,8 +207,6 @@ async def detect_from_uuid(image_id: str) -> DetectionResult:
     """
     try:
         # Download image from S3
-        from src.config import S3_IMAGES_PREFIX
-
         image_key = f"{S3_IMAGES_PREFIX}{image_id}.png"
         image = pipeline.s3_storage.download_image(image_key)
 
@@ -267,8 +262,6 @@ async def anonymize_with_bboxes(request: BboxAnonymizeRequest) -> AnonymizeRespo
         )
 
         # Generate UUID for anonymized image
-        import uuid
-
         anonymized_image_id = str(uuid.uuid4())
 
         # Generate thumbnail (low quality)
@@ -279,9 +272,6 @@ async def anonymize_with_bboxes(request: BboxAnonymizeRequest) -> AnonymizeRespo
             thumbnail = thumbnail.resize(
                 (THUMBNAIL_MAX_WIDTH, new_height), Image.Resampling.LANCZOS
             )
-
-        # Save to S3 (always as PNG)
-        from src.config import S3_IMAGES_PREFIX
 
         # Save with new UUID
         final_output_key = f"{S3_IMAGES_PREFIX}{anonymized_image_id}.png"
@@ -332,9 +322,6 @@ async def download_image(
             raise HTTPException(
                 status_code=400, detail="Invalid quality. Use 'high' or 'low'"
             )
-
-        # Download image from S3 based on quality
-        from src.config import S3_IMAGES_PREFIX
 
         # Determine image key based on quality
         if quality == "low":
