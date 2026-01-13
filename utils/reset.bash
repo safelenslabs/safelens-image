@@ -1,1 +1,1 @@
-rm -rf ./outputs/* ./uploads/* ./temp/*
+rm -rf ./debug/*
