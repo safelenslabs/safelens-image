@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     # S3 Storage
     s3_bucket_name: str = Field(..., alias="S3_BUCKET_NAME")
     s3_region_name: str = Field(default="us-east-1", alias="S3_REGION_NAME")
+    s3_endpoint_url: Optional[str] = Field(default=None, alias="S3_ENDPOINT_URL")
     aws_access_key_id: Optional[str] = Field(default=None, alias="AWS_ACCESS_KEY_ID")
     aws_secret_access_key: Optional[str] = Field(
         default=None, alias="AWS_SECRET_ACCESS_KEY"

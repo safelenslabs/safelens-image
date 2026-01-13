@@ -5,13 +5,13 @@ Supports both polygon and bounding box regions.
 
 from typing import List, Optional, Tuple
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
-from .models import (
+from ..models import (
     BoundingBox,
     ReplacementMethod,
     PIIDetection,
     FaceDetection,
 )
-from .config import DEFAULT_FACE_METHOD, DEFAULT_TEXT_METHOD
+from ..config import DEFAULT_FACE_METHOD, DEFAULT_TEXT_METHOD
 
 
 class Anonymizer:

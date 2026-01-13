@@ -12,14 +12,14 @@ import io
 import base64
 from google import genai
 
-from .models import (
+from ..models import (
     PIIDetection,
     FaceDetection,
     BoundingBox,
     PIIType,
     DetectionType,
 )
-from .config import DETECTION_MODEL, MIN_FACE_CONFIDENCE, MIN_TEXT_CONFIDENCE
+from ..config import DETECTION_MODEL, MIN_FACE_CONFIDENCE, MIN_TEXT_CONFIDENCE
 
 
 # System prompt for Gemini detection

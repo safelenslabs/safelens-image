@@ -8,14 +8,14 @@ import uuid
 from typing import Optional
 from PIL import Image, ImageDraw
 from google import genai
-from .models import BoundingBox, PIIType, PII_REPLACEMENT_VALUES
-from .config import (
+from ..models import BoundingBox, PIIType, PII_REPLACEMENT_VALUES
+from ..config import (
     IMAGEN_MODEL,
     MASK_PADDING,
     S3_DEBUG_MASKED_PREFIX,
     S3_DEBUG_GEN_PREFIX,
 )
-from .s3_storage import S3Storage
+from ..s3_storage import S3Storage
 
 
 class ImageGenerator:

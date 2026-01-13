@@ -5,7 +5,7 @@ Pipeline orchestrator that coordinates detection and anonymization.
 import uuid
 from typing import Dict, Optional
 from PIL import Image
-from .config import (
+from ..config import (
     DEFAULT_FACE_METHOD,
     DEFAULT_TEXT_METHOD,
     MIN_FACE_CONFIDENCE,
@@ -16,7 +16,7 @@ from .config import (
     S3_OUTPUTS_PREFIX,
     S3_ANONYMIZED_PREFIX,
 )
-from .models import (
+from ..models import (
     DetectionResult,
     PIIDetection,
     FaceDetection,
@@ -27,8 +27,8 @@ from .models import (
 from .gemini_detector import GeminiDetector
 from .image_generator import ImageGenerator
 from .anonymizer import Anonymizer
-from .s3_storage import S3Storage
-from .settings import Settings
+from ..s3_storage import S3Storage
+from ..settings import Settings
 
 
 class PrivacyPipeline:

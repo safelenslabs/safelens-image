@@ -22,11 +22,14 @@ class S3Storage:
         """
         self.bucket_name = settings.s3_bucket_name
         region = settings.s3_region_name
+        endpoint_url = settings.s3_endpoint_url
         access_key = settings.aws_access_key_id
         secret_key = settings.aws_secret_access_key
 
         # Initialize S3 client
         session_kwargs = {"region_name": region}
+        if endpoint_url:
+            session_kwargs["endpoint_url"] = endpoint_url
         if access_key and secret_key:
             session_kwargs["aws_access_key_id"] = access_key
             session_kwargs["aws_secret_access_key"] = secret_key
